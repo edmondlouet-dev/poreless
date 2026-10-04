@@ -26,7 +26,10 @@ function useDriftingBlob(
         useNativeDriver: false,
       })
     );
-    Animated.loop(Animated.sequence(sequence)).start();
+    const loop = Animated.loop(Animated.sequence(sequence));
+    loop.start();
+    // Stop the old loop on resize/rotation, otherwise two loops fight over one value.
+    return () => loop.stop();
   }, [dimension]);
   return anim;
 }

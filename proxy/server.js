@@ -1,6 +1,6 @@
 /**
- * Poreless INCI Proxy — sits between the mobile app and the INCI API.
- * The real API key lives only in .env (never in the client bundle).
+ * Poreless Proxy — sits between the mobile app and the INCI and Gemini APIs.
+ * The real API keys live only in .env (never in the client bundle).
  *
  * Deploy options: Railway, Render, Fly.io, Heroku, or any Node host.
  * Set the env vars shown in .env.example on your hosting dashboard.
@@ -8,23 +8,27 @@
 require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
+const ai      = require('./gemini');
 
 const API_KEY  = process.env.INCI_API_KEY;
 const API_BASE = process.env.INCI_API_BASE_URL ?? 'https://api.inci-beauty.com/v1';
 const PORT     = process.env.PORT ?? 3001;
 
-if (!API_KEY) {
-  console.error('[proxy] INCI_API_KEY is not set. Check your .env file.');
-  process.exit(1);
-}
+if (!API_KEY) console.warn('[proxy] INCI_API_KEY is not set: INCI routes will return 503.');
+if (!process.env.GEMINI_API_KEY) console.warn('[proxy] GEMINI_API_KEY is not set: /ai routes will return 503.');
 
 const app = express();
+// Behind a host's load balancer (Railway, Render, Fly…) set TRUST_PROXY=1 so
+// rate limiting sees the real client IP rather than the balancer's.
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY));
 app.use(cors());          // allow the Expo dev server (localhost:8081 / EAS)
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));   // photos arrive as base64
+app.use('/ai', ai);
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
 async function inciGet(path, params = {}) {
+  if (!API_KEY) throw { status: 503, message: 'INCI is not configured' };
   const url = new URL(API_BASE + path);
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null) url.searchParams.set(k, v);
@@ -109,6 +113,11 @@ app.get('/compatibility', async (req, res) => {
   }
 });
 
+// Malformed or oversized bodies: plain JSON, never a stack trace.
+app.use((err, _req, res, _next) => {
+  res.status(err.status ?? 500).json({ error: err.status === 413 ? 'request too large' : 'bad request' });
+});
+
 app.listen(PORT, () => {
-  console.log(`[proxy] Poreless INCI proxy listening on http://localhost:${PORT}`);
+  console.log(`[proxy] Poreless proxy listening on http://localhost:${PORT}`);
 });

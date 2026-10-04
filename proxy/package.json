@@ -1,7 +1,7 @@
 {
   "name": "poreless-proxy",
   "version": "1.0.0",
-  "description": "Thin proxy server — keeps the INCI API key out of the mobile bundle.",
+  "description": "Thin proxy server — keeps the INCI and Gemini API keys out of the mobile bundle.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

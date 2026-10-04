@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Liquid Glass — Mobile Layout</title>
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     DESIGN TOKENS
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --radius-card: 24px;
+    --radius-pill: 999px;
+
+    /* Apple .ultraThinMaterial — translucent fill */
+    --glass-fill: rgba(255, 255, 255, 0.10);
+    --glass-fill-strong: rgba(255, 255, 255, 0.16);
+
+    /* The "0.5pt rule": razor-thin light-catching edge */
+    --edge: rgba(255, 255, 255, 0.55);
+    --edge-soft: rgba(255, 255, 255, 0.22);
+
+    /* Vibrancy text — opacity layers let color bleed through */
+    --text-primary: rgba(255, 255, 255, 0.94);
+    --text-secondary: rgba(255, 255, 255, 0.66);
+    --text-tertiary: rgba(255, 255, 255, 0.42);
+
+    --shadow-card: 0 8px 32px rgba(20, 12, 50, 0.28);
+
+    /* Fluted ridge texture — 6px period: bright highlight → soft shadow valley.
+       Layered as a background so it sits ON TOP of the blurred backdrop but
+       BELOW the card's own text/icons (just like real fluted glass). */
+    --flute: repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.18) 0px,
+      rgba(255, 255, 255, 0.05) 1.2px,
+      rgba(255, 255, 255, 0.00) 2.4px,
+      rgba(0, 0, 0, 0.08) 4.2px,
+      rgba(255, 255, 255, 0.18) 6px
+    );
+
+    /* Rounded system font stack (SF Rounded → Inter fallback) */
+    --font: ui-rounded, "SF Pro Rounded", "SF Pro Display",
+            -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    background: #0b0a1f;
+    overflow: hidden;
+  }
+
+  /* Center a phone-shaped viewport so it reads as a mobile screen */
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     PHONE FRAME — responsive mobile screen
+     ───────────────────────────────────────────────────────────── */
+  .phone {
+    position: relative;
+    width: min(100%, 390px);
+    height: min(100vh, 844px);
+    border-radius: 44px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.06),
+      0 30px 80px rgba(0, 0, 0, 0.55);
+    isolation: isolate;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     1. BACKGROUND — fluid, shifting mesh gradient
+        (indigos · deep cyans · purples)
+     ───────────────────────────────────────────────────────────── */
+  .mesh {
+    position: absolute;
+    inset: 0;
+    background: #120c2e;
+    z-index: 0;
+  }
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.85;
+    will-change: transform;
+  }
+  .blob.b1 {
+    width: 340px; height: 340px;
+    top: -80px; left: -90px;
+    background: radial-gradient(circle at 30% 30%, #5b3df5, transparent 70%);
+    animation: drift1 18s ease-in-out infinite;
+  }
+  .blob.b2 {
+    width: 300px; height: 300px;
+    bottom: 40px; right: -70px;
+    background: radial-gradient(circle at 50% 50%, #16c8d8, transparent 70%);
+    animation: drift2 22s ease-in-out infinite;
+  }
+  .blob.b3 {
+    width: 280px; height: 280px;
+    top: 220px; left: 40px;
+    background: radial-gradient(circle at 50% 50%, #b13df5, transparent 70%);
+    animation: drift3 20s ease-in-out infinite;
+  }
+  .blob.b4 {
+    width: 240px; height: 240px;
+    bottom: 180px; left: -60px;
+    background: radial-gradient(circle at 50% 50%, #2d6bf5, transparent 70%);
+    animation: drift1 26s ease-in-out infinite reverse;
+  }
+  @keyframes drift1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(40px, 50px) scale(1.1); }
+    66%      { transform: translate(-30px, 20px) scale(0.95); }
+  }
+  @keyframes drift2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(-50px, -40px) scale(1.12); }
+  }
+  @keyframes drift3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    40%      { transform: translate(30px, -30px) scale(1.08); }
+    75%      { transform: translate(-20px, 40px) scale(0.92); }
+  }
+  /* subtle grain to make the gradient feel filmic, not flat */
+  .mesh::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     SCROLLABLE CONTENT
+     ───────────────────────────────────────────────────────────── */
+  .screen {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    overflow-y: auto;
+    padding: 64px 20px 120px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .screen::-webkit-scrollbar { display: none; }
+
+  .status-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 26px;
+    z-index: 3;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.3px;
+  }
+  .status-bar .dots { display: flex; gap: 5px; align-items: center; }
+  .status-bar .dots span {
+    width: 16px; height: 10px;
+    border-radius: 2px;
+    background: var(--text-primary);
+    opacity: 0.85;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     2 + 3. FLOATING GLASS CARD  ·  ultra-thin material + crisp edge
+     ───────────────────────────────────────────────────────────── */
+  .glass {
+    position: relative;
+    /* fluted ridges painted over the translucent fill, above the blurred backdrop */
+    background: var(--flute), var(--glass-fill);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border-radius: var(--radius-card);
+    /* THE CRISP EDGE — razor-thin white border catches the light */
+    border: 0.5px solid var(--edge-soft);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
+  /* top highlight: a brighter sliver along the upper edge (specular) */
+  .glass::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent, var(--edge), transparent);
+    opacity: 0.9;
+  }
+
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── Header ───────────────────────────────────────────────── */
+  .greeting { margin-bottom: 22px; }
+  .greeting .kicker {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+  .greeting h1 {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-top: 6px;
+    letter-spacing: -0.5px;
+  }
+  .greeting h1 .accent { color: rgba(140, 200, 255, 0.9); font-weight: 500; }
+
+  /* ── Hero score card ──────────────────────────────────────── */
+  .hero { padding: 22px; }
+  .hero-top { display: flex; align-items: baseline; justify-content: space-between; }
+  .hero .score {
+    font-size: 64px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+  .hero .delta {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(120, 255, 210, 0.92);
+    background: rgba(120, 255, 210, 0.12);
+    padding: 5px 11px;
+    border-radius: var(--radius-pill);
+    border: 0.5px solid rgba(120, 255, 210, 0.25);
+  }
+  .hero .label {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+  }
+  /* mini bar chart */
+  .bars { display: flex; align-items: flex-end; gap: 8px; height: 60px; margin-top: 20px; }
+  .bars .bar {
+    flex: 1;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.22);
+    transition: height 0.4s ease;
+  }
+  .bars .bar.now { background: rgba(170, 210, 255, 0.85); }
+
+  /* ── Metric chips row ─────────────────────────────────────── */
+  .chips { display: flex; gap: 10px; }
+  .chip {
+    flex: 1;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .chip .val {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+  }
+  .chip .name {
+    margin-top: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+
+  /* ── Routine list ─────────────────────────────────────────── */
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin: 4px 2px;
+  }
+  .routine { padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+  .routine .tick {
+    width: 22px; height: 22px;
+    border-radius: 7px;
+    border: 1.5px solid var(--edge-soft);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .routine.done .tick {
+    background: rgba(170, 210, 255, 0.9);
+    border-color: transparent;
+  }
+  .routine.done .tick svg { display: block; }
+  .routine .tick svg { display: none; width: 12px; height: 12px; }
+  .routine .info { flex: 1; min-width: 0; }
+  .routine .info .step {
+    font-size: 14px; font-weight: 600; color: var(--text-primary);
+  }
+  .routine .info .prod {
+    font-size: 12px; color: var(--text-secondary); margin-top: 1px;
+  }
+  .routine.done .info { opacity: 0.5; }
+  .routine .num {
+    font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     BOTTOM TAB BAR — liquid glass + redesigned icons
+     ───────────────────────────────────────────────────────────── */
+  .tab-bar {
+    position: absolute;
+    left: 12px; right: 12px; bottom: 14px;
+    height: 68px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 6px;
+    /* denser fluted ridges on the bar — texture above blur, icons stay crisp on top */
+    background: var(--flute), var(--glass-fill-strong);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border-radius: 28px;
+    border: 0.5px solid var(--edge-soft);
+    box-shadow: 0 10px 40px rgba(10, 6, 30, 0.45);
+  }
+  .tab-bar::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 16px; right: 16px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--edge), transparent);
+  }
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    position: relative;
+    padding-top: 4px;
+  }
+  .tab .ic { width: 24px; height: 24px; display: block; }
+  .tab .ic path, .tab .ic circle, .tab .ic line, .tab .ic rect {
+    stroke: var(--text-tertiary);
+    stroke-width: 1.6;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.25s ease;
+  }
+  .tab .lbl {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    transition: color 0.25s ease;
+  }
+  /* active tab — glow halo + brightened icon */
+  .tab.active .ic path, .tab.active .ic circle,
+  .tab.active .ic line, .tab.active .ic rect {
+    stroke: var(--text-primary);
+    stroke-width: 1.9;
+  }
+  .tab.active .lbl { color: var(--text-primary); }
+  .tab.active::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(150, 200, 255, 0.32), transparent 70%);
+    z-index: -1;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <!-- 1. Mesh gradient background -->
+    <div class="mesh">
+      <div class="blob b1"></div>
+      <div class="blob b2"></div>
+      <div class="blob b3"></div>
+      <div class="blob b4"></div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="dots"><span></span></div>
+    </div>
+
+    <!-- Scrollable content -->
+    <div class="screen">
+      <div class="greeting">
+        <div class="kicker">Mon · May 27 · UV 6</div>
+        <h1>good morning,<br /><span class="accent">edmond</span></h1>
+      </div>
+
+      <div class="stack">
+        <!-- Hero glass card -->
+        <div class="glass hero">
+          <div class="hero-top">
+            <div>
+              <div class="score">78</div>
+              <div class="label">Overall skin score</div>
+            </div>
+            <div class="delta">+3 this week</div>
+          </div>
+          <div class="bars">
+            <div class="bar" style="height:55%"></div>
+            <div class="bar" style="height:62%"></div>
+            <div class="bar" style="height:58%"></div>
+            <div class="bar" style="height:70%"></div>
+            <div class="bar" style="height:66%"></div>
+            <div class="bar" style="height:74%"></div>
+            <div class="bar now" style="height:88%"></div>
+          </div>
+        </div>
+
+        <!-- Metric chips -->
+        <div class="chips">
+          <div class="glass chip"><div class="val">82</div><div class="name">Hydration</div></div>
+          <div class="glass chip"><div class="val">74</div><div class="name">Texture</div></div>
+          <div class="glass chip"><div class="val">88</div><div class="name">Calm</div></div>
+        </div>
+
+        <!-- Routine -->
+        <div class="section-title">This morning</div>
+        <div class="glass routine done">
+          <div class="tick">
+            <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke="#0b0a1f" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="info">
+            <div class="step">Cleanser</div>
+            <div class="prod">CeraVe Hydrating Cleanser</div>
+          </div>
+          <div class="num">01</div>
+        </div>
+        <div class="glass routine done">
+          <div class="tick">
+            <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke="#0b0a1f" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="info">
+            <div class="step">Vitamin C Serum</div>
+            <div class="prod">SkinCeuticals C E Ferulic</div>
+          </div>
+          <div class="num">02</div>
+        </div>
+        <div class="glass routine">
+          <div class="tick"></div>
+          <div class="info">
+            <div class="step">Mineral SPF 30+</div>
+            <div class="prod">EltaMD UV Clear SPF 46</div>
+          </div>
+          <div class="num">03</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom tab bar — redesigned icons -->
+    <nav class="tab-bar">
+      <!-- TODAY — sun / day -->
+      <div class="tab active" data-tab="today">
+        <svg class="ic" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="4.5"/>
+          <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2L5.6 5.6"/>
+        </svg>
+        <span class="lbl">Today</span>
+      </div>
+
+      <!-- SCAN — focus reticle with face arc -->
+      <div class="tab" data-tab="scan">
+        <svg class="ic" viewBox="0 0 24 24">
+          <path d="M3 8V6a2.5 2.5 0 0 1 2.5-2.5H7M17 3.5h1.5A2.5 2.5 0 0 1 21 6v2M21 16v2a2.5 2.5 0 0 1-2.5 2.5H17M7 20.5H5.5A2.5 2.5 0 0 1 3 18v-2"/>
+          <path d="M9 14.5a3.2 3.2 0 0 0 6 0"/>
+          <circle cx="9.3" cy="10" r="0.4"/>
+          <circle cx="14.7" cy="10" r="0.4"/>
+        </svg>
+        <span class="lbl">Scan</span>
+      </div>
+
+      <!-- PROPORTIONS — sparkle / facets -->
+      <div class="tab" data-tab="proportions">
+        <svg class="ic" viewBox="0 0 24 24">
+          <path d="M12 3.5l1.7 4.8 4.8 1.7-4.8 1.7L12 16.5l-1.7-4.8L5.5 10l4.8-1.7z"/>
+          <path d="M18.5 16l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>
+        </svg>
+        <span class="lbl">Proportions</span>
+      </div>
+
+      <!-- RITUALS — flame / candle -->
+      <div class="tab" data-tab="rituals">
+        <svg class="ic" viewBox="0 0 24 24">
+          <path d="M12 3c0 4-4 5-4 8.5A4 4 0 0 0 16 11.5c0-2-1-3-2-4 0 2-1 3-2 3 0-3 0-4.5 0-7.5z"/>
+          <path d="M8.5 20.5h7M12 17v3.5"/>
+        </svg>
+        <span class="lbl">Rituals</span>
+      </div>
+
+      <!-- YOU — profile -->
+      <div class="tab" data-tab="you">
+        <svg class="ic" viewBox="0 0 24 24">
+          <circle cx="12" cy="8.5" r="3.8"/>
+          <path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>
+        </svg>
+        <span class="lbl">You</span>
+      </div>
+    </nav>
+  </div>
+
+  <script>
+    // Tab switching — active state + glow follow
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    }));
+
+    // Routine rows toggle done state on tap
+    document.querySelectorAll('.routine').forEach(r => {
+      r.addEventListener('click', () => r.classList.toggle('done'));
+    });
+  </script>
+</body>
+</html>

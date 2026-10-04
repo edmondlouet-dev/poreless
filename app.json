@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Poreless",
+    "slug": "poreless",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo-face.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FBFAF7"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.poreless.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo-face.png",
+        "backgroundColor": "#FBFAF7"
+      },
+      "package": "com.poreless.app"
+    },
+    "web": {
+      "favicon": "./assets/logo-face.png",
+      "bundler": "metro"
+    },
+    "plugins": ["expo-font"]
+  }
+}

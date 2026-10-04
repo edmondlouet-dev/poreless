@@ -57,6 +57,26 @@ Then in Chrome, press **F12** → click the phone icon (Toggle Device Toolbar) �
 
 ---
 
+## On-device photo checks (needs a development build)
+
+Before a photo goes to the AI, `src/services/faceCheck.ts` runs Google ML Kit
+face detection on the phone. It sends back a retake prompt for no face, a turned
+or tilted head, a face that is too small, or closed eyes, without spending an AI
+call. On the Proportions scan it also measures eye tilt from the eye-corner
+landmarks instead of asking the AI to guess.
+
+ML Kit is native code, so it runs in a development build, not in Expo Go or on
+the web. There the check switches itself off and the AI's own photo check still
+applies.
+
+```bash
+npm install
+npx expo run:android   # builds and installs a dev build on the emulator or a plugged-in phone
+# iOS (needs a Mac): npx expo run:ios   — iOS 15.5+, set in app.json
+```
+
+---
+
 ## Project Structure
 
 ```

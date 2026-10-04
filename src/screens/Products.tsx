@@ -86,7 +86,7 @@ export const Products: React.FC<Props> = ({ onBack }) => {
   const [searched, setSearched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const barrierFatigued = /sensiti|fatig/i.test(faceMetrics.barrierStatus);
+  const barrierFatigued = /sensiti/i.test(faceMetrics.barrierStatus);
 
   // ── Unified shelf ─────────────────────────────────────────────────────────
   // One inventory, two sources: INCI-scanned products (with tracked volume) and

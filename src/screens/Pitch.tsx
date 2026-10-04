@@ -51,7 +51,7 @@ const FEATURES = [
   {
     Icon: FlaskConical,
     title: 'Conflict Harmonizer',
-    body: 'Your shelf is checked for clashing actives — retinol over a fatigued barrier, vitamin C timing — so nothing undercuts anything else.',
+    body: 'Your shelf is checked for clashing actives — retinol while your skin feels sensitive, vitamin C timing — so nothing undercuts anything else.',
   },
 ];
 
@@ -177,7 +177,7 @@ export const Pitch: React.FC<Props> = ({ onContinue }) => {
             <View style={{ gap: 10 }}>
               {[
                 { n: '01', t: 'Right order, every time', b: 'Actives are layered thin-to-thick so each one penetrates before the next seals it in — the single biggest free lever on results.' },
-                { n: '02', t: 'Barrier-first', b: 'Conflicts (e.g. retinol on a fatigued barrier) are flagged before they set you back, so progress compounds instead of resetting.' },
+                { n: '02', t: 'Barrier-first', b: 'Conflicts (e.g. retinol while skin feels sensitive) are flagged before they set you back, so progress compounds instead of resetting.' },
                 { n: '03', t: 'Tracked, not guessed', b: 'Every scan logs 8 scores. Seeing the line move is what keeps the routine consistent — and consistency is what moves the line.' },
               ].map(s => (
                 <View key={s.n} style={styles.sciRow}>
@@ -213,8 +213,8 @@ export const Pitch: React.FC<Props> = ({ onContinue }) => {
                 <View style={{ flex: 1 }}>
                   <Text style={[T.body, { fontWeight: '600', color: C.ink }]}>True results. No filters.</Text>
                   <Text style={[T.bodySm, { color: C.ink3, marginTop: 3, lineHeight: 17 }]}>
-                    Scores come from computer-vision models trained on dermatology datasets.
-                    What you see is what your skin actually looks like.
+                    Scores are AI estimates of how your skin looks in each photo. Light, camera and
+                    makeup affect them, so Poreless tracks the trend, not one number.
                   </Text>
                 </View>
               </View>

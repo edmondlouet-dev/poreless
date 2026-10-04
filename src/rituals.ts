@@ -81,7 +81,7 @@ export const RITUALS: Ritual[] = [
     recommended: {
       name: 'Sensibio H2O Micellar Water',
       brand: 'Bioderma',
-      why: 'The French pharmacy icon — lifts the day off without rubbing, ideal for the fatigued, reactive barrier your scan flagged.',
+      why: 'The French pharmacy icon — lifts the day off without rubbing, gentle enough for days your skin feels sensitive.',
       buyUrl: SEPHORA('bioderma micellar water'),
     },
   },
@@ -100,7 +100,7 @@ export const RITUALS: Ritual[] = [
     recommended: {
       name: 'Kumkumadi Tailam Face Oil',
       brand: 'Forest Essentials',
-      why: 'The saffron-and-herb oil at the heart of abhyanga — drops glide for the lymphatic massage your structural blueprint calls for.',
+      why: 'The saffron-and-herb oil at the heart of abhyanga — a few drops give slip for a gentle face massage.',
       buyUrl: SEPHORA('kumkumadi face oil'),
     },
   },

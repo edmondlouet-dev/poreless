@@ -63,15 +63,22 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
     }
   }, [permission?.granted]);
 
-  const tiltLabel = structural.canthalTilt < 0 ? 'Slightly Downward'
-    : structural.canthalTilt > 0 ? 'Positive' : 'Neutral';
+  // null until a scan runs; then whether that scan's result was demo data.
+  const [lastSimulated, setLastSimulated] = useState<boolean | null>(null);
+  const demo = lastSimulated ?? !geminiLive;
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Live metrics drive the strip so a fresh scan visibly changes the numbers.
+  const tiltLabel = structural.canthalTilt < 0 ? 'outer corner lower'
+    : structural.canthalTilt > 0 ? 'outer corner higher' : 'level';
+  const feelsSensitive = /sensiti/i.test(structural.barrierStatus);
+
+  // Proportions are normal variation, so they never get a good/warn grade. Only
+  // the self-reported skin feel can flag something to act on.
   const LM_METRICS = [
-    { key: 'tilt',    value: `${structural.canthalTilt}°`, label: 'Tilt', dot: (structural.canthalTilt < 0 ? 'warn' : 'good') as 'warn' | 'good' },
-    { key: 'midface', value: structural.midfaceRatio.toFixed(2), label: 'Midface', dot: (structural.midfaceRatio > 1.08 ? 'warn' : 'good') as 'warn' | 'good' },
-    { key: 'fluid',   value: structural.fluidRetention, label: 'Fluid', dot: (structural.fluidRetention === 'Low' ? 'good' : 'warn') as 'warn' | 'good' },
-    { key: 'barrier', value: structural.barrierStatus.split(' / ')[0] ?? 'N/A', label: 'Barrier', dot: (/sensiti|fatig/i.test(structural.barrierStatus) ? 'warn' : 'good') as 'warn' | 'good' },
+    { key: 'tilt',    value: `${structural.canthalTilt}°`, label: 'Eye tilt', dot: 'good' as const },
+    { key: 'midface', value: structural.midfaceRatio.toFixed(2), label: 'Midface', dot: 'good' as const },
+    { key: 'fluid',   value: structural.fluidRetention, label: 'Puffiness', dot: 'good' as const },
+    { key: 'barrier', value: structural.barrierStatus.replace('Feels ', ''), label: 'Skin feel', dot: (feelsSensitive ? 'warn' : 'good') as 'warn' | 'good' },
   ];
 
   const startScan = async () => {
@@ -92,49 +99,68 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
         base64 = photo.base64 ?? '';
       }
       const result = await analyzeStructuralFrame(base64);
-      updateMetrics(result);          // canthalTilt, midfaceRatio, fluidRetention, barrierStatus
-      recordStructuralScan();
+      setLastSimulated(result.simulated);
+      if (result.seeDoctor) {
+        setNotice(`${result.seeDoctorReason ? result.seeDoctorReason + '. ' : ''}This is worth showing a GP or dermatologist. Poreless can't assess it.`);
+        setScanStep('idle');
+        return;
+      }
+      if (!result.photoUsable) {
+        setNotice(`${result.photoIssue ? result.photoIssue + '. ' : ''}Face the camera straight-on and level, in even light. Nothing was saved, and this didn't use your free scan.`);
+        setScanStep('camera');
+        return;
+      }
+      setNotice(null);
+      // Demo numbers never overwrite saved readings.
+      if (!result.simulated) {
+        const { canthalTilt, midfaceRatio, fluidRetention } = result;
+        updateMetrics({ canthalTilt, midfaceRatio, fluidRetention });
+        recordStructuralScan();
+      }
       setScanStep('done');
-      // Ask the Gemini brain for a luxury-magazine read of the new geometry.
       refreshEditorialInsight();
     } catch {
       setScanStep('idle');
-      Alert.alert('Scan failed', 'Please try again.');
+      Alert.alert('Couldn\'t analyse this photo', 'Check your connection and try again. Nothing was saved.');
     }
   };
 
   const insights = [
     {
-      title: `Canthal Tilt: ${structural.canthalTilt}° (${tiltLabel})`,
-      body: structural.canthalTilt < 0
-        ? 'A slightly downward outer-eye corner softens the gaze. When applying eye serum, press up-and-out toward the brow tail to lift the appearance — never drag inward.'
-        : 'Positive canthal tilt correlates with a more alert, lifted eye area. Maintain with gentle upward eye-care movements.',
-      tag: structural.canthalTilt < 0 ? 'Watch' : 'Good',
-      tagVariant: structural.canthalTilt < 0 ? 'warn' : 'sage',
+      title: `Eye tilt: ${structural.canthalTilt}° (${tiltLabel})`,
+      body: 'A rough estimate from one photo; head angle easily shifts it by a degree or two. ' +
+        'Eye shape is set by bone and ligaments, and every shape is normal. Skincare and ' +
+        'massage don\'t change it, so there is nothing here to fix.',
+      tag: 'Info',
+      tagVariant: 'sage',
     },
     {
-      title: `Midface Ratio: ${structural.midfaceRatio.toFixed(2)}${structural.midfaceRatio > 1.08 ? ' (Mild Asymmetry)' : ''}`,
-      body: structural.midfaceRatio > 1.08
-        ? 'A ratio above 1.08 reads as mild asymmetry. Sculpt the fuller cheek upward toward the temple with fewer passes on the lighter side to even the structure over time.'
-        : 'Midface length is well-proportioned. Mewing and proper tongue posture help maintain this long-term.',
-      tag: structural.midfaceRatio > 1.08 ? 'Moderate' : 'Good',
-      tagVariant: structural.midfaceRatio > 1.08 ? 'warn' : 'sage',
+      title: `Midface ratio: ${structural.midfaceRatio.toFixed(2)}`,
+      body: 'A rough estimate of midface length relative to width. Faces vary widely and ' +
+        'every face is slightly asymmetric. Skincare, gua sha and "mewing" have no good ' +
+        'evidence of changing adult facial structure.',
+      tag: 'Info',
+      tagVariant: 'sage',
     },
     {
-      title: `Fluid Retention: ${structural.fluidRetention}`,
+      title: `Puffiness: ${structural.fluidRetention}`,
       body: structural.fluidRetention === 'Low'
-        ? 'Lymphatic flow is clear. A light morning drainage keeps the midface defined.'
-        : 'Trace lymph downward from the inner brow along the jaw to the collarbone — three slow passes per side before product — to de-puff and define.',
-      tag: structural.fluidRetention === 'Low' ? 'Good' : 'Moderate',
-      tagVariant: structural.fluidRetention === 'Low' ? 'sage' : 'warn',
+        ? 'Your face didn\'t look puffy in this photo.'
+        : 'Your face looked a little puffy in this photo. Puffiness changes with sleep, salt, ' +
+          'alcohol, allergies and time of day. A cool rinse can feel refreshing. If swelling ' +
+          'is sudden, painful or around the lips or eyes, see a doctor.',
+      tag: structural.fluidRetention === 'Low' ? 'Info' : 'Varies',
+      tagVariant: 'sage',
     },
     {
-      title: `Barrier: ${structural.barrierStatus}`,
-      body: /sensiti|fatig/i.test(structural.barrierStatus)
-        ? 'Your barrier reads reactive. Favour gentle, fragrance-free formulas and press the final layer in with warm palms rather than rubbing to calm reactivity.'
-        : 'Barrier health is strong. Consistency compounds — protect it with daily SPF.',
-      tag: /sensiti|fatig/i.test(structural.barrierStatus) ? 'Watch' : 'Good',
-      tagVariant: /sensiti|fatig/i.test(structural.barrierStatus) ? 'warn' : 'sage',
+      title: `Skin feel: ${structural.barrierStatus}`,
+      body: feelsSensitive
+        ? 'You said your skin feels sensitive. Favour gentle, fragrance-free products and pause ' +
+          'strong actives (retinoids, acids) until it feels comfortable again.'
+        : 'This is what you told us on the Scan tab; a photo can\'t show how skin feels. ' +
+          'Update it there whenever it changes. Daily SPF is the best-evidenced habit for skin.',
+      tag: feelsSensitive ? 'Go gentle' : 'Info',
+      tagVariant: feelsSensitive ? 'warn' : 'sage',
     },
   ];
 
@@ -156,7 +182,7 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
               <Text style={{ fontStyle: 'italic', color: C.accentInk }}>structure</Text>
             </Text>
             <Text style={[T.bodySm, { color: C.ink3, marginTop: 4 }]}>
-              beyond skin · ratios · angles · improvements
+              rough estimates · normal variation · not a grade
             </Text>
           </View>
           <TouchableOpacity style={styles.settingsBtn} activeOpacity={0.7} onPress={onOpenSettings}>
@@ -168,11 +194,17 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
           <MetricStrip metrics={LM_METRICS} active={active} onPick={setActive} />
         </View>
 
+        {notice && (
+          <FlutedGlass padding={12} mode="lookmax" style={{ marginBottom: 14 }}>
+            <Text style={[T.bodySm, { color: C.ink2, lineHeight: 18 }]}>{notice}</Text>
+          </FlutedGlass>
+        )}
+
         {/* AI editorial read — shimmers while the Gemini brain composes it */}
         {(isAnalyzing || editorialInsight) && (
           <FlutedGlass padding={16} mode="lookmax" style={{ marginBottom: 14 }}>
             <Text style={[T.kicker, { color: C.accent, marginBottom: 10 }]}>
-              ✦ PORELESS AI · EDITORIAL READ
+              ✦ PORELESS AI · A NOTE ON YOUR PROPORTIONS
             </Text>
             {isAnalyzing && !editorialInsight ? (
               <SkeletonLines lines={3} lastWidth="55%" />
@@ -204,7 +236,7 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
                 <View style={styles.scanStatus}>
                   <Text style={[T.kicker, { color: 'white', fontSize: 9 }]}>
                     {scanStep === 'scanning'
-                      ? '· mapping 68 landmarks ·'
+                      ? '· analysing photo ·'
                       : '· align face · natural light · look ahead ·'}
                   </Text>
                 </View>
@@ -222,10 +254,15 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
 
         <View style={styles.footer}>
           <Text style={[T.kicker, { color: C.ink3 }]}>METRICS · STRUCTURAL</Text>
-          <Text style={[T.kicker, { color: geminiLive ? C.accent : C.ink3 }]}>
-            {geminiLive ? 'PORELESS AI · LIVE' : 'PORELESS AI · SIM'}
+          <Text style={[T.kicker, { color: !demo ? C.accent : C.ink3 }]}>
+            {demo ? 'PORELESS AI · DEMO' : 'PORELESS AI · LIVE'}
           </Text>
         </View>
+
+        <Text style={[T.bodySm, { color: C.ink3, fontSize: 11, lineHeight: 15, marginTop: 4 }]}>
+          Rough estimates from one photo, for curiosity only. They describe normal variation,
+          not health or attractiveness, and skincare doesn't change them.
+        </Text>
 
         <Text style={[T.kicker, { marginBottom: 8, marginTop: 8 }]}>INSIGHTS · TAP TO EXPAND</Text>
         {insights.map((ins, i) => {

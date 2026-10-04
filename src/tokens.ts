@@ -71,6 +71,7 @@ export const R = {
   md:   6,
   lg:   10,
   xl:   14,
+  glass: 18,  // Liquid Glass cards: softer, rounder corners
   pill: 999,
 } as const;
 

@@ -21,7 +21,7 @@ interface Props {
   why?: string;
   tag?: string;                 // e.g. "FOR YOUR ACNE" or "CARRIED FROM AM"
   // Controlled mode: when `done` is supplied the parent owns completion state
-  // (so tapping the Live Activity can check this row off, and vice-versa).
+  // (so ticks are saved per day and the routine can be marked complete).
   done?: boolean;
   onToggle?: (next: boolean) => void;
 }
@@ -37,7 +37,7 @@ export const RoutineRow: React.FC<Props> = ({
   // Fade content when done (no strikethrough — just dimmer + heavier glass)
   const contentOpacity = useRef(new Animated.Value(done ? 0.55 : 1)).current;
 
-  // Keep the fade in sync when completion is driven from outside (Live Activity).
+  // Keep the fade in sync when completion is driven from outside (e.g. Guide me).
   useEffect(() => {
     Animated.timing(contentOpacity, {
       toValue: done ? 0.55 : 1,

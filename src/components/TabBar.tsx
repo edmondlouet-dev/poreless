@@ -1,11 +1,10 @@
 /**
  * Liquid-glass bottom tab bar — Lucide editorial icon set:
  *
- * TODAY       — Sparkles
- * SCAN        — Maximize
- * PROPORTIONS — Activity
- * RITUALS     — Bookmark
- * YOU         — User
+ * TODAY    — Sparkles
+ * PROGRESS — ScanFace
+ * SHELF    — FlaskConical
+ * YOU      — User
  *
  * Uniform ultra-thin profile: strokeWidth 1.2, size 24.
  * Active #2A2522 · inactive #A09B95.
@@ -16,12 +15,11 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
-import { Sparkles, Maximize, Bookmark, User } from 'lucide-react-native';
-import { FibonacciIcon } from './FibonacciIcon';
+import { Sparkles, ScanFace, FlaskConical, User } from 'lucide-react-native';
 import { C, T } from '../tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export type TabKey = 'today' | 'scan' | 'proportions' | 'rituals' | 'you';
+export type TabKey = 'today' | 'progress' | 'shelf' | 'you';
 
 const NAV_ACTIVE   = '#2A2522';
 const NAV_INACTIVE = '#A09B95';
@@ -29,32 +27,27 @@ const NAV_INACTIVE = '#A09B95';
 interface Props {
   active: TabKey;
   onChange: (tab: TabKey) => void;
-  mode?: 'normal' | 'lookmax';
 }
 
-const ICONS = { today: Sparkles, scan: Maximize, rituals: Bookmark, you: User } as const;
+const ICONS = { today: Sparkles, progress: ScanFace, shelf: FlaskConical, you: User } as const;
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'today',       label: 'TODAY' },
-  { key: 'scan',        label: 'SCAN' },
-  { key: 'proportions', label: 'PROPORTIONS' },
-  { key: 'rituals',     label: 'RITUALS' },
-  { key: 'you',         label: 'YOU' },
+  { key: 'today',    label: 'TODAY' },
+  { key: 'progress', label: 'PROGRESS' },
+  { key: 'shelf',    label: 'SHELF' },
+  { key: 'you',      label: 'YOU' },
 ];
 
 const TabIcon: React.FC<{ name: TabKey; active: boolean }> = ({ name, active }) => {
   const color = active ? NAV_ACTIVE : NAV_INACTIVE;
-  if (name === 'proportions') {
-    return <FibonacciIcon size={24} strokeWidth={1.2} color={color} showGrid />;
-  }
-  const Icon = ICONS[name as Exclude<TabKey, 'proportions'>];
+  const Icon = ICONS[name];
   return <Icon size={24} strokeWidth={1.2} color={color} />;
 };
 
 const RING_SIZE = 34;
 const H_PAD = 8;
 
-export const TabBar: React.FC<Props> = ({ active, onChange, mode = 'normal' }) => {
+export const TabBar: React.FC<Props> = ({ active, onChange }) => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -83,7 +76,7 @@ export const TabBar: React.FC<Props> = ({ active, onChange, mode = 'normal' }) =
     ).start();
   }, [width]);
 
-  const bgTint = mode === 'lookmax' ? 'rgba(250,248,243,0.45)' : 'rgba(255,255,253,0.42)';
+  const bgTint = 'rgba(255,255,253,0.42)';
 
   return (
     <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 10) }]}>

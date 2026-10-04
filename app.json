@@ -36,7 +36,14 @@
             "deploymentTarget": "15.5"
           }
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Poreless uses your location to show today's UV index."
+        }
+      ],
+      "expo-notifications"
     ]
   }
 }

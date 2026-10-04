@@ -25,7 +25,7 @@ function mapCategory(tags: string[] = []): string {
   if (t.includes('vitamin-c') || t.includes('ascorbic') || t.includes('antioxidant')) return 'antiox';
   if (t.includes('toner')) return 'serum';
   if (t.includes('mask') || t.includes('eye')) return 'serum';
-  return 'moisturizer';
+  return '';   // unknown: the user picks the type on the Shelf
 }
 
 export async function searchProducts(query: string, page = 1): Promise<OBFProduct[]> {

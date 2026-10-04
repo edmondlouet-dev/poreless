@@ -3,8 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { X, ChevronRight, ScanFace } from 'lucide-react-native';
-import { ARSculptOverlay, type ARMotion, type ARStep } from './ARSculptOverlay';
+import { X, ChevronRight } from 'lucide-react-native';
 import { C, R, T, S } from '../tokens';
 
 const STEP_DURATION = 30; // fallback seconds per step
@@ -13,23 +12,20 @@ export interface AmbientStep {
   label: string;
   productName: string;
   duration?: number;
-  motion?: ARMotion;     // how to apply this step (for AR)
 }
 
 interface Props {
   steps: AmbientStep[];
-  ritualKey?: string;
   onComplete: () => void;
   onDismiss: () => void;
 }
 
 export const AmbientModeOverlay: React.FC<Props> = ({
-  steps, ritualKey, onComplete, onDismiss,
+  steps, onComplete, onDismiss,
 }) => {
   const [stepIdx, setStepIdx]         = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [progress, setProgress]       = useState(0);   // 0–1, drives the bar
-  const [showAR, setShowAR]           = useState(false);
   const fadeAnim     = useRef(new Animated.Value(0)).current;
   const elapsedRef   = useRef(0);   // ms elapsed in the current step
 
@@ -49,10 +45,9 @@ export const AmbientModeOverlay: React.FC<Props> = ({
   }, [stepIdx]);
 
   // One pausable tick loop drives BOTH the bar (progress) and the countdown from
-  // a single accumulator, so they can never drift apart. Pauses while the AR
-  // guide is open and resumes from where it left off — no reset.
+  // a single accumulator, so they can never drift apart.
   useEffect(() => {
-    if (!current || showAR) return;          // paused while AR is open
+    if (!current) return;
     let last = Date.now();
     const total = stepSecs * 1000;
     const id = setInterval(() => {
@@ -68,7 +63,7 @@ export const AmbientModeOverlay: React.FC<Props> = ({
       }
     }, 50);
     return () => clearInterval(id);
-  }, [stepIdx, showAR]);
+  }, [stepIdx]);
 
   const advanceStep = () => {
     setStepIdx(i => {
@@ -80,10 +75,6 @@ export const AmbientModeOverlay: React.FC<Props> = ({
       return next;
     });
   };
-
-  const arSteps: ARStep[] = current
-    ? [{ icon: current.motion ?? 'apply', title: `Apply · ${current.label}`, body: current.productName }]
-    : [];
 
   return (
     <Animated.View style={[styles.root, { opacity: fadeAnim }]}>
@@ -121,31 +112,12 @@ export const AmbientModeOverlay: React.FC<Props> = ({
         ))}
       </View>
 
-      {/* AR "how to apply" — opens the camera filter for this step */}
-      <TouchableOpacity style={styles.arBtn} onPress={() => setShowAR(true)} activeOpacity={0.85}>
-        <ScanFace size={18} strokeWidth={1.3} color={C.accentInk} />
-        <Text style={[T.button, { color: C.accentInk, fontSize: 12 }]}>AR · how to apply</Text>
-      </TouchableOpacity>
-
       {/* Skip ahead */}
       <TouchableOpacity style={styles.skipBtn} onPress={advanceStep} activeOpacity={0.7}>
         <Text style={[T.kicker, { color: C.ink3 }]}>SKIP STEP</Text>
         <ChevronRight size={16} strokeWidth={1.2} color={C.ink3} />
       </TouchableOpacity>
 
-      {ritualKey && (
-        <Text style={[T.kicker, styles.ritualLabel]}>
-          ✦ {ritualKey.toUpperCase()} RITUAL
-        </Text>
-      )}
-
-      {showAR && (
-        <ARSculptOverlay
-          steps={arSteps}
-          ritualName={current?.label}
-          onClose={() => setShowAR(false)}
-        />
-      )}
     </Animated.View>
   );
 };
@@ -201,19 +173,8 @@ const styles = StyleSheet.create({
     backgroundColor: C.line2,
   },
   dotActive: { backgroundColor: C.accent },
-  arBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    alignSelf: 'center', marginTop: 26,
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: R.pill,
-    backgroundColor: C.accentSoft,
-    borderWidth: 1, borderColor: C.accent + '55',
-  },
   skipBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
     marginTop: 18,
-  },
-  ritualLabel: {
-    color: C.accent, textAlign: 'center', marginTop: 16,
   },
 });

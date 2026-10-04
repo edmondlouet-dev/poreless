@@ -1,4 +1,5 @@
-// Product catalog + routine builder
+// Product catalog + routine builder. The routine is built from the user's
+// shelf: each product's category decides where it sits and when it's used.
 
 export type ProductCategory =
   | 'cleanser' | 'antiox' | 'serum' | 'exfoliant'
@@ -37,10 +38,10 @@ export const STEP_LABEL: Record<ProductCategory, string> = {
   cleanser:   'Cleanser',
   antiox:     'Vitamin C / Antioxidant',
   serum:      'Treatment Serum',
-  exfoliant:  'BHA Exfoliant',
+  exfoliant:  'Exfoliant',
   retinoid:   'Retinoid',
   moisturizer:'Moisturizer',
-  spf:        'Mineral SPF 30+',
+  spf:        'SPF 30+',
 };
 
 export const CATALOG: Record<string, ProductInfo> = {
@@ -58,40 +59,64 @@ export const CATALOG: Record<string, ProductInfo> = {
   'La Roche-Posay Anthelios SPF 60':{ category: 'spf',         actives: ['mexoryl', 'tinosorb'],          tone: 'AM',   mins: 1 },
 };
 
-// Registers a product fetched from Open Beauty Facts into the CATALOG so the
-// routine builder can pick it up. Called before addProduct() in the store.
-export function registerProduct(name: string, category: ProductCategory, actives: string[] = []): void {
-  if (!CATALOG[name]) {
-    CATALOG[name] = { category, actives, tone: 'both', mins: 1 };
-  }
+// The minimum the routine builder needs from a shelf product.
+export interface RoutineProduct {
+  name: string;
+  category?: ProductCategory | null;
+  ingredients: string[];
 }
 
-export function buildRoutine(owned: string[], when: Tone): RoutineStep[] {
-  const matched = owned
-    .map(name => {
-      const info = CATALOG[name];
-      return info ? { name, ...info } : null;
+const CATEGORIES = new Set<ProductCategory>(ORDER);
+export const isCategory = (c: unknown): c is ProductCategory =>
+  typeof c === 'string' && CATEGORIES.has(c as ProductCategory);
+
+// A product's category: its own if it has one, else a known catalog entry.
+export function categoryOf(p: { name: string; category?: string | null }): ProductCategory | null {
+  if (isCategory(p.category)) return p.category;
+  return CATALOG[p.name]?.category ?? null;
+}
+
+// When each kind of product belongs: SPF and vitamin C by day, retinoids and
+// acids at night (they raise sun sensitivity), the basics both times.
+const TONE: Record<ProductCategory, Tone> = {
+  cleanser: 'both', moisturizer: 'both', serum: 'both',
+  antiox: 'AM', spf: 'AM', retinoid: 'PM', exfoliant: 'PM',
+};
+
+// Acid nights when the shelf has both an exfoliant and a retinoid: using both on
+// the same night raises irritation, so they alternate (acid twice a week).
+const ACID_NIGHTS = new Set([1, 4]);   // Monday and Thursday
+
+export function buildRoutine(shelf: RoutineProduct[], when: Tone, date = new Date()): RoutineStep[] {
+  const valid = shelf
+    .map(p => {
+      const category = categoryOf(p);
+      if (!category) return null;
+      const info = CATALOG[p.name];
+      return {
+        name: p.name, category,
+        actives: info?.actives ?? p.ingredients.slice(0, 3),
+        tone: TONE[category],
+        mins: info?.mins ?? 1,
+      };
     })
-    .filter((p): p is RoutineStep & { name: string } => p !== null);
-
-  const filtered = matched.filter(p => p.tone === when || p.tone === 'both');
-
-  // Skip retinoid in AM, skip SPF in PM
-  const valid = filtered.filter(p => {
-    if (when === 'AM' && p.category === 'retinoid') return false;
-    if (when === 'PM' && p.category === 'spf') return false;
-    return true;
-  });
+    .filter((p): p is RoutineStep => p !== null)
+    .filter(p => p.tone === when || p.tone === 'both');
 
   // First product per category, in canonical order
-  const seen = new Set<ProductCategory>();
-  const result: RoutineStep[] = [];
+  let result: RoutineStep[] = [];
   for (const cat of ORDER) {
-    const match = valid.find(p => p.category === cat && !seen.has(p.category));
-    if (match) {
-      seen.add(cat);
-      result.push(match);
-    }
+    const match = valid.find(p => p.category === cat);
+    if (match) result.push(match);
+  }
+
+  const hasCat = (c: ProductCategory) => result.some(p => p.category === c);
+  if (when === 'PM' && hasCat('exfoliant') && hasCat('retinoid')) {
+    const acidNight = ACID_NIGHTS.has(date.getDay());
+    result = result
+      .filter(p => p.category !== (acidNight ? 'retinoid' : 'exfoliant'))
+      .map(p => (p.category === 'exfoliant' ? { ...p, freq: 'acid night · Mon & Thu' }
+        : p.category === 'retinoid' ? { ...p, freq: 'not on acid nights' } : p));
   }
   return result;
 }
@@ -114,11 +139,11 @@ export interface CompensatedRoutine {
   compensations: Compensation[];
 }
 
-export function buildEveningRoutine(owned: string[], amCompleted: boolean): CompensatedRoutine {
-  const pm = buildRoutine(owned, 'PM');
+export function buildEveningRoutine(shelf: RoutineProduct[], amCompleted: boolean, date = new Date()): CompensatedRoutine {
+  const pm = buildRoutine(shelf, 'PM', date);
   if (amCompleted) return { steps: pm, compensations: [] };
 
-  const am = buildRoutine(owned, 'AM');
+  const am = buildRoutine(shelf, 'AM');
   const pmCats        = new Set(pm.map(s => s.category));
   const pmHasRetinoid = pm.some(s => s.category === 'retinoid');
   const pmHasExfoliant = pm.some(s => s.category === 'exfoliant');
@@ -161,16 +186,16 @@ export function buildEveningRoutine(owned: string[], amCompleted: boolean): Comp
 
 // Concerns from onboarding map to the active a routine should add to address them.
 const CONCERN_GAP: Record<string, GapWarning> = {
-  acne:      { key: 'exfoliant', label: 'BHA Exfoliant',    reason: 'You flagged breakouts — salicylic acid clears pores and cuts comedones.' },
+  acne:      { key: 'exfoliant', label: 'BHA Exfoliant',    reason: 'You flagged breakouts. Salicylic acid helps keep pores clear; give it 6–8 weeks.' },
   texture:   { key: 'exfoliant', label: 'Gentle Exfoliant', reason: 'For texture & pores, a PHA/AHA 2×/week smooths the surface.' },
-  darkspots: { key: 'antiox',    label: 'Vitamin C Serum',  reason: 'For dark spots, morning Vitamin C fades pigment under SPF.' },
+  darkspots: { key: 'antiox',    label: 'Vitamin C Serum',  reason: 'For dark spots, daily SPF matters most. Morning vitamin C under it may help them fade.' },
   aging:     { key: 'retinoid',  label: 'Retinoid',         reason: 'For fine lines, a nightly retinoid is the most evidence-backed active.' },
-  dryness:   { key: 'serum',     label: 'Hydrating Serum',  reason: 'You flagged dryness — a hyaluronic acid serum layers in moisture.' },
+  dryness:   { key: 'serum',     label: 'Hydrating Serum',  reason: 'You flagged dryness. A hyaluronic acid serum on damp skin, sealed with moisturiser, helps.' },
 };
 
-export function routineGaps(owned: string[], concerns: string[] = []): GapWarning[] {
-  const cats = owned
-    .map(n => CATALOG[n]?.category)
+export function routineGaps(shelf: RoutineProduct[], concerns: string[] = []): GapWarning[] {
+  const cats = shelf
+    .map(categoryOf)
     .filter(Boolean) as ProductCategory[];
 
   // Personalised gaps from the onboarding concerns come FIRST — they're the most
@@ -187,7 +212,7 @@ export function routineGaps(owned: string[], concerns: string[] = []): GapWarnin
   if (!cats.includes('moisturizer'))
     staples.push({ key: 'moisturizer', label: 'Moisturizer', reason: 'Locks in hydration and strengthens the barrier.' });
   if (!cats.some(c => c === 'spf'))
-    staples.push({ key: 'spf', label: 'Broad-Spectrum SPF', reason: 'UV is the #1 cause of premature aging. Non-negotiable.' });
+    staples.push({ key: 'spf', label: 'Broad-Spectrum SPF', reason: 'Sun exposure is the biggest outside cause of skin ageing. Daily SPF has the strongest evidence of any step.' });
 
   // De-dupe staples that a concern gap already covers.
   const merged = [...concernGaps];

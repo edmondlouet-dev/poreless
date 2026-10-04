@@ -19,46 +19,36 @@ import {
 } from '@expo-google-fonts/jetbrains-mono';
 
 import { StoreProvider, useStore } from './src/store';
-import { TabBar } from './src/components/TabBar';
+import { TabBar, type TabKey } from './src/components/TabBar';
 import { Login } from './src/screens/Login';
 import { SignUp } from './src/screens/SignUp';
 import { Questionnaire } from './src/screens/Questionnaire';
 import { PlanSummary } from './src/screens/PlanSummary';
 import { Pitch } from './src/screens/Pitch';
 import { Today } from './src/screens/Today';
-import { Scan } from './src/screens/Scan';
-import { Proportions } from './src/screens/Proportions';
-import { Rituals } from './src/screens/Rituals';
+import { Progress } from './src/screens/Progress';
+import { Shelf } from './src/screens/Shelf';
 import { You } from './src/screens/You';
-import { Products } from './src/screens/Products';
 import { Settings } from './src/screens/Settings';
 
 SplashScreen.preventAutoHideAsync();
 
-type TabKey = 'today' | 'scan' | 'proportions' | 'rituals' | 'you';
 type AuthScreen = 'login' | 'signup';
 
 const MainApp: React.FC = () => {
   const {
     authed, pitchSeen, planSeen, questionnaireComplete,
-    setPitchSeen, setPlanSeen, setMode,
+    setPitchSeen, setPlanSeen,
   } = useStore();
   const [activeTab, setActiveTab] = useState<TabKey>('today');
-  const [showProducts, setShowProducts] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
-
-  const handleTabChange = (tab: TabKey) => {
-    setActiveTab(tab);
-    setMode(tab === 'proportions' ? 'lookmax' : 'normal');
-  };
 
   // A reset sends pitchSeen back to false — clear any open overlays and return
   // to the first tab so the intro flow starts clean.
   useEffect(() => {
     if (!pitchSeen) {
       setShowSettings(false);
-      setShowProducts(false);
       setActiveTab('today');
     }
   }, [pitchSeen]);
@@ -91,35 +81,20 @@ const MainApp: React.FC = () => {
     return <Settings onBack={() => setShowSettings(false)} />;
   }
 
-  // Step 5: Products overlay
-  if (showProducts) {
-    return <Products onBack={() => setShowProducts(false)} />;
-  }
-
-  // Step 6: Main tab interface
+  // Step 5: Main tab interface
   return (
     <View style={styles.app}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       <View style={{ flex: 1 }}>
-        {activeTab === 'today'       && <Today />}
-        {activeTab === 'scan'        && <Scan />}
-        {activeTab === 'proportions' && <Proportions onOpenSettings={() => setShowSettings(true)} />}
-        {activeTab === 'rituals'     && <Rituals />}
-        {activeTab === 'you'         && (
-          <You
-            onProducts={() => setShowProducts(true)}
-            onSettings={() => setShowSettings(true)}
-          />
-        )}
+        {activeTab === 'today'    && <Today onNavigate={setActiveTab} />}
+        {activeTab === 'progress' && <Progress />}
+        {activeTab === 'shelf'    && <Shelf />}
+        {activeTab === 'you'      && <You onSettings={() => setShowSettings(true)} />}
       </View>
 
       <View style={styles.tabBarContainer}>
-        <TabBar
-          active={activeTab}
-          onChange={handleTabChange}
-          mode={activeTab === 'proportions' ? 'lookmax' : 'normal'}
-        />
+        <TabBar active={activeTab} onChange={setActiveTab} />
       </View>
     </View>
   );

@@ -2,69 +2,48 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSession, signOut as authSignOut } from './services/auth';
 import type { UserProfile } from './services/auth';
+import { SKIN_FEEL_UNSET } from './skin';
+import { isCategory, type ProductCategory } from './products';
+import { trialFor, type Trial, type TrialVerdict } from './trials';
+import { dayKey, streakFrom } from './dates';
+import { keepPhoto, deletePhoto, deleteAllPhotos } from './services/photos';
 import {
-  DEFAULT_STRUCTURAL,
-  type StructuralMetrics, type ShelfItem,
-} from './skin';
-import {
-  analyzeProductConflict, analyzeProductFromImage, generateEditorialInsight,
+  analyzeProductConflict, analyzeProductFromImage,
   verifyGeminiKey, GEMINI_LIVE,
-  type EditorialMetrics,
 } from './services/gemini';
 
-type AppMode = 'normal' | 'lookmax';
-
-// ── Extended shelf product (barcode-scanned, full INCI data) ──────────────────
+// ── One shelf: every product the user owns, however it was added ───────────────
+// Search results and label scans land in the same list, so every product feeds
+// the routine, the conflict checker and the trial timer alike.
 export interface ShelfProduct {
   id: string;
   name: string;
   brand: string;
   ingredients: string[];
-  remainingVolume: number;  // 0–100
+  category: ProductCategory | null;
+  remainingVolume: number;  // 0–100, a rough estimate drawn down by use
   purchaseUrl: string;
   barcode?: string;
-  category?: string;
-  warningText?: string | null;   // conflict note from the Gemini cosmetic chemist
+  warningText?: string | null;   // irritation note from the AI label read
+  addedAt: string;
 }
+
+export type NewProduct = Omit<ShelfProduct, 'id' | 'addedAt' | 'remainingVolume' | 'category'> & {
+  category?: string | null;
+};
 
 export interface SkinScores {
   overall: number; hydration: number; texture: number;
   pores: number; redness: number; oil: number; acne: number; tone: number;
 }
 
-// ── Single source of truth for the shelf ──────────────────────────────────────
-// The Rituals synergy/blueprint engine needs a lightweight {active, tag} view of
-// each product. Rather than maintain a second parallel array, we DERIVE it from
-// the rich userShelf so there is exactly one inventory to keep in sync.
-const ACTIVE_KEYWORDS = [
-  'retinol', 'retinyl', 'tretinoin', 'adapalene', 'ascorbic acid', 'vitamin c',
-  'niacinamide', 'salicylic acid', 'glycolic acid', 'lactic acid', 'azelaic',
-  'hyaluronic acid', 'ceramide', 'squalane', 'panthenol', 'glycerin',
-];
-
-function primaryActive(p: ShelfProduct): string {
-  for (const ing of p.ingredients) {
-    const low = ing.toLowerCase();
-    const hit = ACTIVE_KEYWORDS.find(k => low.includes(k));
-    if (hit) return hit;
-  }
-  return (p.ingredients[0] ?? '').toLowerCase();
-}
-
-export function deriveShelfItems(products: ShelfProduct[]): ShelfItem[] {
-  return products.map(p => ({
-    id: p.id,
-    name: p.name,
-    active: primaryActive(p),
-    tag: p.name.length <= 18 ? p.name : (p.brand || p.name.slice(0, 18)),
-  }));
-}
-
-interface UsageCounters {
-  surfaceScansToday: number;
-  structuralScansThisWeek: number;
-  lastScanTimestamp: string | null;
-  lastStructuralScanDate: string | null;
+// One face scan: the photo (kept on the phone) and, when the AI gave a real
+// reading, its scores. Demo numbers are never stored.
+export interface ScanEntry {
+  id: string;
+  date: string;
+  photoUri: string | null;
+  scores: SkinScores | null;
 }
 
 export interface QuestionnaireAnswers {
@@ -76,39 +55,34 @@ export interface QuestionnaireAnswers {
   source: string[];
 }
 
-interface StoreState {
+// Everything below is saved on the phone and survives restarts.
+interface SavedData {
+  skinFeel: string;                           // how the user SAYS their skin feels
+  shelf: ShelfProduct[];
+  scans: ScanEntry[];
+  completions: string[];                      // routineKey()s of finished routines
+  doneSteps: Record<string, ProductCategory[]>; // today's ticked steps, per routine
+  trials: Trial[];
+  spfReapplyAt: string | null;
+}
+
+interface StoreState extends SavedData {
   authed: boolean;
   pitchSeen: boolean;
-  planSeen: boolean;               // personalised plan summary shown once
+  planSeen: boolean;
   questionnaireComplete: boolean;
   user: UserProfile | null;
-  owned: string[];
-  streak: number;
-  lastScan: Date | null;
-  lastScores: SkinScores | null;
-  prevScores: SkinScores | null;   // the scan before lastScores — drives deltas
-  mode: AppMode;
-  activeRitual: string | null;
-  temperatureUnit: 'C' | 'F';
-  structural: StructuralMetrics;
-  // ── New global state ──────────────────────────────────────────────────────
-  passiveTrackingEnabled: boolean;
-  usageCounters: UsageCounters;
-  userShelf: ShelfProduct[];
-  ritualStreaks: Record<string, number>;
   showPremiumModal: boolean;
   questionnaireAnswers: QuestionnaireAnswers;
-  // ── AI brain ────────────────────────────────────────────────────────────────
-  isAnalyzing: boolean;            // true while a Gemini call is in flight
-  editorialInsight: string | null; // luxury-magazine read of the latest structure
-  geminiLive: boolean;             // verified at launch — drives truthful LIVE/SIM badges
+  isAnalyzing: boolean;            // true while a label read is in flight
+  geminiLive: boolean;             // verified at launch — drives truthful LIVE/DEMO badges
 }
 
 interface StoreComputed {
-  userProfile: { isPremium: boolean; streakCount: number; passiveTrackingEnabled: boolean };
-  faceMetrics: StructuralMetrics;
-  selectedTraditionId: string | null;
-  shelf: ShelfItem[];           // derived from userShelf — single source of truth
+  isPremium: boolean;
+  streak: number;
+  lastScores: SkinScores | null;
+  prevScores: SkinScores | null;
 }
 
 interface StoreActions {
@@ -117,28 +91,21 @@ interface StoreActions {
   setPitchSeen: () => void;
   setPlanSeen: () => void;
   completeQuestionnaire: () => void;
-  addProduct: (name: string) => void;
-  removeProduct: (name: string) => void;
-  setMode: (mode: AppMode) => void;
-  setLastScores: (scores: SkinScores) => void;
-  setActiveRitual: (key: string | null) => void;
-  setTemperatureUnit: (unit: 'C' | 'F') => void;
-  // ── Spec handlers ──────────────────────────────────────────────────────────
-  updateMetrics: (metrics: Partial<StructuralMetrics>) => void;
-  togglePassiveTracking: () => void;
-  setPremiumStatus: (isPremium: boolean) => void;
-  addBarcodeProduct: (product: ShelfProduct) => void;
-  removeBarcodeProduct: (id: string) => void;
-  logRoutineUsage: () => void;          // decrement shelf volumes on a completed routine
-  completeDailyRitual: (ritualKey: string) => void;
-  incrementSurfaceScan: () => void;
-  recordStructuralScan: () => void;
   saveQuestionnaire: (answers: QuestionnaireAnswers) => void;
+  setSkinFeel: (feel: string) => void;
+  addProduct: (product: NewProduct) => void;
+  removeProduct: (id: string) => void;
+  setProductCategory: (id: string, category: ProductCategory) => void;
+  addScan: (photoTempUri: string | null, scores: SkinScores | null) => Promise<void>;
+  deleteScan: (id: string) => void;
+  toggleStep: (key: string, category: ProductCategory) => void;
+  completeRoutine: (key: string, categories: ProductCategory[]) => void;
+  setTrialVerdict: (productId: string, verdict: TrialVerdict) => void;
+  setSpfReapplyAt: (iso: string | null) => void;
+  setPremiumStatus: (isPremium: boolean) => void;
   openPremiumModal: () => void;
   dismissPremiumModal: () => void;
-  // ── AI brokers — async, drive isAnalyzing + global re-render ─────────────────
-  analyzeLabel: (rawLabelText: string, imageBase64?: string) => Promise<ShelfProduct>;
-  refreshEditorialInsight: () => Promise<void>;
+  analyzeLabel: (rawLabelText: string, imageBase64?: string) => Promise<NewProduct>;
   resetApp: () => Promise<void>;   // wipe all local data → restart at the intro
 }
 
@@ -148,6 +115,7 @@ const PITCH_KEY          = '@poreless_pitch_seen';
 const PLAN_KEY           = '@poreless_plan_seen';
 const QUESTIONNAIRE_KEY  = '@poreless_questionnaire_done';
 const ANSWERS_KEY        = '@poreless_questionnaire_answers';
+const DATA_KEY           = '@poreless_data_v1';
 // Bump this token to force a one-time fresh start on the next launch: every
 // "@poreless*" key is wiped once, so the app reopens at the intro screen.
 const RESET_KEY          = '@poreless_reset_token';
@@ -165,83 +133,42 @@ const EMPTY_ANSWERS: QuestionnaireAnswers = {
   goals: [], concern: [], skintype: [], frequency: [], age: [], source: [],
 };
 
-const DEFAULT_USER_SHELF: ShelfProduct[] = [
-  {
-    id: 'vitc',
-    name: 'Vitamin C Serum',
-    brand: 'The Ordinary',
-    ingredients: ['ascorbic acid', 'propanediol', 'glycerin', 'hyaluronic acid'],
-    remainingVolume: 65,
-    purchaseUrl: 'https://www.amazon.co.uk/s?k=the+ordinary+vitamin+c&tag=poreless-20',
-    category: 'antiox',
-  },
-  {
-    id: 'retinol',
-    name: 'Retinol 0.5%',
-    brand: 'The Ordinary',
-    ingredients: ['retinol', 'squalane', 'tocopherol', 'bisabolol'],
-    remainingVolume: 18,
-    purchaseUrl: 'https://www.amazon.co.uk/s?k=the+ordinary+retinol+0.5&tag=poreless-20',
-    category: 'retinoid',
-  },
-  {
-    id: 'ha',
-    name: 'Hyaluronic Acid 2% + B5',
-    brand: 'The Ordinary',
-    ingredients: ['hyaluronic acid', 'sodium hyaluronate', 'pentylene glycol', 'water', 'panthenol'],
-    remainingVolume: 80,
-    purchaseUrl: 'https://www.amazon.co.uk/s?k=the+ordinary+hyaluronic+acid&tag=poreless-20',
-    category: 'serum',
-  },
-];
+// Everything starts empty: a new user sees only what they add or scan.
+const EMPTY_DATA: SavedData = {
+  skinFeel: SKIN_FEEL_UNSET,
+  shelf: [],
+  scans: [],
+  completions: [],
+  doneSteps: {},
+  trials: [],
+  spfReapplyAt: null,
+};
 
 const defaults: StoreState = {
+  ...EMPTY_DATA,
   authed: false,
   pitchSeen: false,
   planSeen: false,
   questionnaireComplete: false,
   user: null,
-  owned: [
-    'CeraVe Hydrating Cleanser',
-    'The Ordinary Niacinamide 10%',
-    'EltaMD UV Clear SPF 46',
-    'La Roche-Posay Toleriane',
-    'Differin (Adapalene 0.1%)',
-  ],
-  streak: 14,
-  lastScan: new Date(Date.now() - 18 * 60 * 60 * 1000),
-  lastScores: {
-    overall: 78, hydration: 82, texture: 74,
-    pores: 69, redness: 88, oil: 55, acne: 64, tone: 71,
-  },
-  prevScores: {
-    overall: 75, hydration: 78, texture: 72,
-    pores: 67, redness: 84, oil: 58, acne: 61, tone: 69,
-  },
-  mode: 'normal',
-  activeRitual: null,
-  temperatureUnit: 'C',
-  structural: DEFAULT_STRUCTURAL,
-  passiveTrackingEnabled: true,
-  usageCounters: {
-    surfaceScansToday: 0,
-    structuralScansThisWeek: 0,
-    lastScanTimestamp: null,
-    lastStructuralScanDate: null,
-  },
-  userShelf: DEFAULT_USER_SHELF,
-  ritualStreaks: {},
   showPremiumModal: false,
   questionnaireAnswers: EMPTY_ANSWERS,
   isAnalyzing: false,
-  editorialInsight: null,
   geminiLive: GEMINI_LIVE,
 };
+
+const pickSaved = (s: StoreState): SavedData => ({
+  skinFeel: s.skinFeel, shelf: s.shelf, scans: s.scans, completions: s.completions,
+  doneSteps: s.doneSteps, trials: s.trials, spfReapplyAt: s.spfReapplyAt,
+});
+
+const newId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 const StoreContext = createContext<FullStore>({} as FullStore);
 
 export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [state, setState] = useState<StoreState>(defaults);
+  const [hydrated, setHydrated] = useState(false);
 
   // Always-fresh mirror of state for async brokers that would otherwise close
   // over a stale snapshot.
@@ -260,17 +187,27 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch {}
 
-      const [user, qDone, pSeen, answersRaw, planSeen] = await Promise.all([
+      const [user, qDone, pSeen, answersRaw, planSeen, dataRaw] = await Promise.all([
         getSession(),
         AsyncStorage.getItem(QUESTIONNAIRE_KEY),
         AsyncStorage.getItem(PITCH_KEY),
         AsyncStorage.getItem(ANSWERS_KEY),
         AsyncStorage.getItem(PLAN_KEY),
+        AsyncStorage.getItem(DATA_KEY),
       ]);
       let answers = EMPTY_ANSWERS;
       if (answersRaw) { try { answers = { ...EMPTY_ANSWERS, ...JSON.parse(answersRaw) }; } catch {} }
+      let data = EMPTY_DATA;
+      if (dataRaw) { try { data = { ...EMPTY_DATA, ...JSON.parse(dataRaw) }; } catch {} }
+      // Ticked steps only matter for today.
+      const today = dayKey();
+      const doneSteps = Object.fromEntries(
+        Object.entries(data.doneSteps).filter(([k]) => k.startsWith(today)),
+      );
       setState(s => ({
         ...s,
+        ...data,
+        doneSteps,
         authed: !!user,
         user: user ?? null,
         questionnaireComplete: !!(user || qDone),
@@ -278,11 +215,21 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         planSeen: !!planSeen,
         questionnaireAnswers: answers,
       }));
+      setHydrated(true);
 
-      // Confirm the Gemini key actually authenticates so badges tell the truth.
+      // Confirm the AI proxy actually answers so badges tell the truth.
       verifyGeminiKey().then(ok => setState(s => ({ ...s, geminiLive: ok }))).catch(() => {});
     })();
   }, []);
+
+  // Save the user's data whenever it changes (after the first load, so the
+  // empty defaults never overwrite what's on disk).
+  const saved = pickSaved(state);
+  const savedJson = JSON.stringify(saved);
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(DATA_KEY, savedJson).catch(() => {});
+  }, [hydrated, savedJson]);
 
   const login = (user: UserProfile) =>
     setState(s => ({ ...s, authed: true, user }));
@@ -307,83 +254,102 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     setState(s => ({ ...s, questionnaireComplete: true }));
   };
 
-  const addProduct = (name: string) =>
-    setState(s => ({ ...s, owned: s.owned.includes(name) ? s.owned : [...s.owned, name] }));
-
-  const removeProduct = (name: string) =>
-    setState(s => ({ ...s, owned: s.owned.filter(n => n !== name) }));
-
-  const setMode = (mode: AppMode) => setState(s => ({ ...s, mode }));
-
-  const setLastScores = (scores: SkinScores) =>
-    setState(s => ({ ...s, prevScores: s.lastScores, lastScores: scores, lastScan: new Date() }));
-
   const saveQuestionnaire = (answers: QuestionnaireAnswers) => {
     AsyncStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
     setState(s => ({ ...s, questionnaireAnswers: answers }));
   };
 
-  const setActiveRitual = (key: string | null) =>
-    setState(s => ({ ...s, activeRitual: key }));
+  const setSkinFeel = (skinFeel: string) => setState(s => ({ ...s, skinFeel }));
 
-  const setTemperatureUnit = (unit: 'C' | 'F') =>
-    setState(s => ({ ...s, temperatureUnit: unit }));
+  // Adding a product with a known active also starts its "is it working?" trial.
+  const addProduct = (p: NewProduct) =>
+    setState(s => {
+      const dup = s.shelf.some(x =>
+        (p.barcode && x.barcode === p.barcode) ||
+        (x.name.toLowerCase() === p.name.toLowerCase() && x.brand.toLowerCase() === p.brand.toLowerCase()));
+      if (dup) return s;
+      const product: ShelfProduct = {
+        ...p,
+        id: newId('p'),
+        category: isCategory(p.category) ? p.category : null,
+        remainingVolume: 100,
+        addedAt: new Date().toISOString(),
+      };
+      const trial = trialFor(product);
+      return {
+        ...s,
+        shelf: [...s.shelf, product],
+        trials: trial ? [...s.trials, trial] : s.trials,
+      };
+    });
 
-  const updateMetrics = (metrics: Partial<StructuralMetrics>) =>
-    setState(s => ({ ...s, structural: { ...s.structural, ...metrics } }));
+  // Removing a product drops its unfinished trial; finished verdicts stay for the recap.
+  const removeProduct = (id: string) =>
+    setState(s => ({
+      ...s,
+      shelf: s.shelf.filter(p => p.id !== id),
+      trials: s.trials.filter(t => t.productId !== id || !!t.verdict),
+    }));
 
-  const togglePassiveTracking = () =>
-    setState(s => ({ ...s, passiveTrackingEnabled: !s.passiveTrackingEnabled }));
+  const setProductCategory = (id: string, category: ProductCategory) =>
+    setState(s => ({ ...s, shelf: s.shelf.map(p => (p.id === id ? { ...p, category } : p)) }));
+
+  const addScan = async (photoTempUri: string | null, scores: SkinScores | null) => {
+    const id = newId('scan');
+    const photoUri = photoTempUri ? await keepPhoto(photoTempUri, id) : null;
+    if (!photoUri && !scores) return;
+    setState(s => ({
+      ...s,
+      scans: [...s.scans, { id, date: new Date().toISOString(), photoUri, scores }],
+    }));
+  };
+
+  const deleteScan = (id: string) => {
+    const entry = stateRef.current.scans.find(e => e.id === id);
+    if (entry?.photoUri) deletePhoto(entry.photoUri);
+    setState(s => ({ ...s, scans: s.scans.filter(e => e.id !== id) }));
+  };
+
+  const toggleStep = (key: string, category: ProductCategory) =>
+    setState(s => {
+      const cur = s.doneSteps[key] ?? [];
+      const next = cur.includes(category) ? cur.filter(c => c !== category) : [...cur, category];
+      return { ...s, doneSteps: { ...s.doneSteps, [key]: next } };
+    });
+
+  // A finished routine counts once, ticks every step, and draws down an
+  // estimate of what's left in each product used (about 1% per use).
+  const completeRoutine = (key: string, categories: ProductCategory[]) =>
+    setState(s => {
+      if (s.completions.includes(key)) {
+        return { ...s, doneSteps: { ...s.doneSteps, [key]: categories } };
+      }
+      const used = new Set(categories);
+      const seen = new Set<ProductCategory>();
+      const shelf = s.shelf.map(p => {
+        if (!p.category || !used.has(p.category) || seen.has(p.category)) return p;
+        seen.add(p.category);
+        return { ...p, remainingVolume: Math.max(0, p.remainingVolume - 1) };
+      });
+      return {
+        ...s,
+        shelf,
+        completions: [...s.completions, key],
+        doneSteps: { ...s.doneSteps, [key]: categories },
+      };
+    });
+
+  const setTrialVerdict = (productId: string, verdict: TrialVerdict) =>
+    setState(s => ({
+      ...s,
+      trials: s.trials.map(t => t.productId === productId && !t.verdict
+        ? { ...t, verdict, verdictAt: new Date().toISOString() } : t),
+    }));
+
+  const setSpfReapplyAt = (spfReapplyAt: string | null) => setState(s => ({ ...s, spfReapplyAt }));
 
   const setPremiumStatus = (isPremium: boolean) =>
     setState(s => ({ ...s, user: s.user ? { ...s.user, premium: isPremium } : s.user }));
-
-  const addBarcodeProduct = (product: ShelfProduct) =>
-    setState(s => ({
-      ...s,
-      userShelf: s.userShelf.some(p => p.id === product.id || (p.barcode && p.barcode === product.barcode))
-        ? s.userShelf
-        : [...s.userShelf, product],
-    }));
-
-  const removeBarcodeProduct = (id: string) =>
-    setState(s => ({ ...s, userShelf: s.userShelf.filter(p => p.id !== id) }));
-
-  // Each completed routine draws down the shelf a little, like real daily use.
-  const logRoutineUsage = () =>
-    setState(s => ({
-      ...s,
-      userShelf: s.userShelf.map(p => ({
-        ...p,
-        remainingVolume: Math.max(0, p.remainingVolume - (2 + Math.floor(Math.random() * 4))),
-      })),
-    }));
-
-  const completeDailyRitual = (ritualKey: string) =>
-    setState(s => ({
-      ...s,
-      ritualStreaks: { ...s.ritualStreaks, [ritualKey]: (s.ritualStreaks[ritualKey] ?? 0) + 1 },
-    }));
-
-  const incrementSurfaceScan = () =>
-    setState(s => ({
-      ...s,
-      usageCounters: {
-        ...s.usageCounters,
-        surfaceScansToday: s.usageCounters.surfaceScansToday + 1,
-        lastScanTimestamp: new Date().toISOString(),
-      },
-    }));
-
-  const recordStructuralScan = () =>
-    setState(s => ({
-      ...s,
-      usageCounters: {
-        ...s.usageCounters,
-        structuralScansThisWeek: s.usageCounters.structuralScansThisWeek + 1,
-        lastStructuralScanDate: new Date().toISOString(),
-      },
-    }));
 
   const openPremiumModal    = () => setState(s => ({ ...s, showPremiumModal: true }));
   const dismissPremiumModal = () => setState(s => ({ ...s, showPremiumModal: false }));
@@ -391,31 +357,27 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   // Wipe all local data and return to the very first screen (the intro/pitch).
   const resetApp = async () => {
     try { await wipePorelessStorage(); } catch {}
+    try { await deleteAllPhotos(); } catch {}
     try { await authSignOut(); } catch {}
     try { await AsyncStorage.setItem(RESET_KEY, RESET_TOKEN); } catch {}
     setState({ ...defaults, geminiLive: stateRef.current.geminiLive });
   };
 
-  // ── AI brokers ──────────────────────────────────────────────────────────────
-  // The label scanner hands us raw OCR text; we run it through the Gemini cosmetic
-  // chemist (against the live barrier reading), flip isAnalyzing so the dashboard
-  // can shimmer, and return a fully-formed shelf product carrying any warningText.
-  const analyzeLabel = async (rawLabelText: string, imageBase64?: string): Promise<ShelfProduct> => {
+  // The label scanner hands us a photo (or raw text); the AI reads the product
+  // and checks it against how the user says their skin feels.
+  const analyzeLabel = async (rawLabelText: string, imageBase64?: string): Promise<NewProduct> => {
     setState(s => ({ ...s, isAnalyzing: true }));
     try {
-      const barrier = stateRef.current.structural.barrierStatus;
-      // With a label photo we use Gemini Vision (real OCR); otherwise the text path.
+      const feel = stateRef.current.skinFeel;
       const result = imageBase64
-        ? await analyzeProductFromImage(barrier, imageBase64)
-        : await analyzeProductConflict(barrier, rawLabelText);
+        ? await analyzeProductFromImage(feel, imageBase64)
+        : await analyzeProductConflict(feel, rawLabelText);
       const q = `${result.brand} ${result.name}`.trim();
       return {
-        id: `lbl-${Date.now()}`,
         name: result.name,
         brand: result.brand,
         ingredients: result.ingredients,
-        remainingVolume: 100,
-        purchaseUrl: `https://www.amazon.co.uk/s?k=${encodeURIComponent(q)}&tag=poreless-20`,
+        purchaseUrl: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(q)}`,
         category: result.category,
         warningText: result.conflictDetected ? result.warningText : null,
       };
@@ -424,41 +386,21 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Generates the luxury editorial paragraph from the current structural metrics.
-  const refreshEditorialInsight = async (): Promise<void> => {
-    setState(s => ({ ...s, isAnalyzing: true }));
-    try {
-      const m = stateRef.current.structural;
-      const metrics: EditorialMetrics = {
-        canthalTilt: m.canthalTilt,
-        midfaceRatio: m.midfaceRatio,
-        fluidRetention: m.fluidRetention,
-        barrierStatus: m.barrierStatus,
-      };
-      const insight = await generateEditorialInsight(metrics);
-      setState(s => ({ ...s, editorialInsight: insight, isAnalyzing: false }));
-    } catch {
-      setState(s => ({ ...s, isAnalyzing: false }));
-    }
-  };
-
-  const isPremium = state.user?.premium ?? false;
+  const scored = state.scans.filter(e => e.scores);
+  const lastScores = scored[scored.length - 1]?.scores ?? null;
+  const prevScores = scored[scored.length - 2]?.scores ?? null;
 
   return (
     <StoreContext.Provider value={{
       ...state,
-      userProfile: { isPremium, streakCount: state.streak, passiveTrackingEnabled: state.passiveTrackingEnabled },
-      faceMetrics: state.structural,
-      selectedTraditionId: state.activeRitual,
-      shelf: deriveShelfItems(state.userShelf),
-      login, logout, setPitchSeen, setPlanSeen, completeQuestionnaire,
-      addProduct, removeProduct, setMode,
-      setLastScores, setActiveRitual, setTemperatureUnit,
-      updateMetrics, togglePassiveTracking, setPremiumStatus,
-      addBarcodeProduct, removeBarcodeProduct, logRoutineUsage, completeDailyRitual,
-      incrementSurfaceScan, recordStructuralScan, saveQuestionnaire,
-      openPremiumModal, dismissPremiumModal,
-      analyzeLabel, refreshEditorialInsight, resetApp,
+      isPremium: state.user?.premium ?? false,
+      streak: streakFrom(state.completions),
+      lastScores, prevScores,
+      login, logout, setPitchSeen, setPlanSeen, completeQuestionnaire, saveQuestionnaire,
+      setSkinFeel, addProduct, removeProduct, setProductCategory, addScan, deleteScan,
+      toggleStep, completeRoutine, setTrialVerdict, setSpfReapplyAt,
+      setPremiumStatus, openPremiumModal, dismissPremiumModal,
+      analyzeLabel, resetApp,
     }}>
       {children}
     </StoreContext.Provider>

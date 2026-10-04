@@ -13,24 +13,19 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onActivate?: () => void;
-  reason?: 'structural' | 'library';
+  reason?: 'timelapse';
 }
 
 const COPY = {
-  structural: {
-    eyebrow: 'ARCHITECTURAL LAYER · LOCKED',
-    title: 'Deep structural analysis\nrequires membership.',
-    body: 'Your free weekly structural scan has been used. Unlock unlimited deep-mesh facial analysis and the complete global heritage library.',
-  },
-  library: {
-    eyebrow: 'HERITAGE LIBRARY · LOCKED',
-    title: 'Complete your global ritual\ncollection.',
-    body: 'The first three traditions are always free. Unlock the full seven-tradition heritage library and unlimited structural scans.',
+  timelapse: {
+    eyebrow: 'PROGRESS TIMELAPSE · PREMIUM',
+    title: 'Watch your skin change\nweek by week.',
+    body: 'Scans, your photo timeline, before-and-after compare and the monthly recap are free. Premium plays every progress photo as a timelapse.',
   },
 };
 
 export const PremiumModal: React.FC<Props> = ({
-  visible, onClose, onActivate, reason = 'structural',
+  visible, onClose, onActivate, reason = 'timelapse',
 }) => {
   const slide = useRef(new Animated.Value(SCREEN_H)).current;
 
@@ -90,9 +85,8 @@ export const PremiumModal: React.FC<Props> = ({
             </View>
             <View style={styles.featureList}>
               {[
-                'Unlimited structural mesh analysis',
-                'All 7 global heritage traditions',
-                'Priority skin insights',
+                'Progress photo timelapse',
+                'Everything else stays free',
               ].map(f => (
                 <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
                   <Sparkles size={12} strokeWidth={1.2} color={C.accent} />

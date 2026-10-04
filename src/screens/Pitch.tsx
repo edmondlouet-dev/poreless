@@ -11,47 +11,41 @@ import {
   useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import {
-  Sparkles, ScanBarcode, Wind, ScanFace, Globe, FlaskConical,
+  Sparkles, ScanFace, FlaskConical, Hourglass, Sun, CalendarDays,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Background } from '../components/Background';
 import { FaceLogo } from '../components/FaceLogo';
 import { FlutedGlass } from '../components/FlutedGlass';
-import { ScienceChart } from '../components/ScienceChart';
 import { C, R, T, S } from '../tokens';
 
 const ICON_SW = 1.2;
 
 const FEATURES = [
   {
-    Icon: ScanFace,
-    title: 'AI face scan · 28 biomarkers',
-    body: 'A MediaPipe face-mesh model reads hydration, texture, pores, redness and structural ratios from one front-camera frame — in under 3 seconds.',
-  },
-  {
-    Icon: ScanBarcode,
-    title: 'AI label recognizer · free',
-    body: 'Photograph any product label and AI reads the brand, name and full ingredient list — with a barrier-aware warning when a formula clashes with your last scan.',
-  },
-  {
-    Icon: Wind,
-    title: 'Ambient Mode · hands-free',
-    body: 'A calm, timed walkthrough guides each step of your routine so you never rush — with a Live Activity on your lock screen.',
-  },
-  {
-    Icon: ScanFace,
-    title: 'AR Sculpting guides',
-    body: 'Live arrows over your camera show exactly how to drain, sculpt and lift — drawn from your own structural scan.',
-  },
-  {
-    Icon: Globe,
-    title: '7 heritage rituals',
-    body: 'Japanese, Korean, Ayurvedic, French and more. AI picks the tradition that matches your biology and reshapes tomorrow\'s routine.',
-  },
-  {
     Icon: FlaskConical,
-    title: 'Conflict Harmonizer',
-    body: 'Your shelf is checked for clashing actives — retinol while your skin feels sensitive, vitamin C timing — so nothing undercuts anything else.',
+    title: 'A routine built from your shelf',
+    body: 'Add what you own by search or a label photo. Poreless puts it in the right order, morning and evening, and flags ingredients that clash.',
+  },
+  {
+    Icon: Hourglass,
+    title: '"Is it working?" timer',
+    body: 'Most actives need 6–12 weeks. Poreless tells you how long each one usually takes, and asks for a verdict only when it\'s had a fair run.',
+  },
+  {
+    Icon: ScanFace,
+    title: 'Progress photos that line up',
+    body: 'A faint outline of your last photo helps you match the angle each time. Compare before and after, and get an AI estimate of how your skin looks.',
+  },
+  {
+    Icon: Sun,
+    title: 'Real UV, real reminders',
+    body: 'Today\'s UV index for where you are, and a nudge to reapply SPF when it matters.',
+  },
+  {
+    Icon: CalendarDays,
+    title: 'Monthly recap',
+    body: 'Routines done, how consistent you were, and your first and last photo of the month side by side.',
   },
 ];
 
@@ -116,16 +110,16 @@ export const Pitch: React.FC<Props> = ({ onContinue }) => {
                 Hey there.
               </Text>
               <Text style={[T.bodySm, { color: C.ink3, textAlign: 'center', marginTop: 10, lineHeight: 20, fontSize: 15, fontFamily: 'CormorantGaramond_400Italic' }]}>
-                Ready to awaken your skin's{'\n'}architectural potential?
+                Skincare that's honest{'\n'}about what works.
               </Text>
             </View>
 
             <FlutedGlass padding={16} style={{ marginTop: 8 }}>
               <Text style={[T.kicker, { color: C.accent, marginBottom: 8 }]}>WHY PORELESS</Text>
               <Text style={[T.body, { color: C.ink2, lineHeight: 21 }]}>
-                Most skincare apps sell you products. Poreless reads your actual skin,
-                works with what you already own, and tracks whether it's genuinely
-                improving — measured, not guessed.
+                Most skincare apps sell you products. Poreless works with what you
+                already own, checks it against published dermatology guidance, and
+                helps you see whether it's actually working.
               </Text>
             </FlutedGlass>
 
@@ -163,22 +157,17 @@ export const Pitch: React.FC<Props> = ({ onContinue }) => {
             <Text style={[T.kicker, { color: C.accent, marginBottom: 6 }]}>THE SCIENCE</Text>
             <Text style={[T.h1, { fontSize: 30, marginBottom: 10 }]}>
               consistency,{' '}
-              <Text style={{ fontStyle: 'italic', color: C.accentInk }}>measured</Text>
+              <Text style={{ fontStyle: 'italic', color: C.accentInk }}>over hype</Text>
             </Text>
             <Text style={[T.bodySm, { color: C.ink3, marginBottom: 16, lineHeight: 18 }]}>
-              Skin responds to adherence, correct sequencing and a protected barrier —
-              not to buying more. Here's a typical 12-week skin-score trajectory.
+              Skin responds to using the right few products consistently, not to buying more.
             </Text>
-
-            <FlutedGlass padding={14} style={{ marginBottom: 16 }}>
-              <ScienceChart width={W - S.gutter * 2 - 28} height={190} />
-            </FlutedGlass>
 
             <View style={{ gap: 10 }}>
               {[
-                { n: '01', t: 'Right order, every time', b: 'Actives are layered thin-to-thick so each one penetrates before the next seals it in — the single biggest free lever on results.' },
-                { n: '02', t: 'Barrier-first', b: 'Conflicts (e.g. retinol while skin feels sensitive) are flagged before they set you back, so progress compounds instead of resetting.' },
-                { n: '03', t: 'Tracked, not guessed', b: 'Every scan logs 8 scores. Seeing the line move is what keeps the routine consistent — and consistency is what moves the line.' },
+                { n: '01', t: 'Daily SPF first', b: 'In a 4.5-year trial, people who used sunscreen daily showed about 24% less skin ageing than those who used it at their own discretion.*' },
+                { n: '02', t: 'Give it time', b: 'Retinoids and vitamin C usually need 8–12 weeks, salicylic acid 6–8. Switching sooner means never finding out what works.' },
+                { n: '03', t: 'Fewer clashes', b: 'Some actives irritate when stacked, like a retinoid and an acid on the same night. Poreless flags them so you can space them out.' },
               ].map(s => (
                 <View key={s.n} style={styles.sciRow}>
                   <Text style={[T.num, { fontSize: 12, color: C.accent, width: 24 }]}>{s.n}</Text>
@@ -190,7 +179,7 @@ export const Pitch: React.FC<Props> = ({ onContinue }) => {
               ))}
             </View>
             <Text style={[T.bodySm, { color: C.ink4, fontSize: 9, marginTop: 14, lineHeight: 14 }]}>
-              * Illustrative trajectory based on adherence literature. Individual results vary.
+              * Hughes et al., Annals of Internal Medicine, 2013. Individual results vary.
             </Text>
           </PageScroll>
 
@@ -202,8 +191,8 @@ export const Pitch: React.FC<Props> = ({ onContinue }) => {
                 ready when{'\n'}you are
               </Text>
               <Text style={[T.bodySm, { color: C.ink3, textAlign: 'center', marginTop: 10, lineHeight: 18 }]}>
-                Free to start — the scanner, Ambient Mode, AR guides and Harmonizer
-                are all included. No card required.
+                Free to start. Your shelf, routine, scans, progress photos and monthly
+                recap are all included. No card required.
               </Text>
             </View>
 

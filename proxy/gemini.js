@@ -32,12 +32,6 @@ function image(v) {
   return v;
 }
 
-function num(v, name) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) throw new BadInput(`${name} must be a number`);
-  return n;
-}
-
 function optStr(v, fallback, max) {
   return typeof v === 'string' && v.trim() ? v.slice(0, max) : fallback;
 }
@@ -91,35 +85,6 @@ const TASKS = {
       'string|null, "seeDoctor": boolean, "seeDoctorReason": string|null, "light": ' +
       'string, "hydration": number, "texture": number, "pores": number, "redness": ' +
       'number, "oil": number, "acne": number, "tone": number, "message": string }.',
-  }),
-
-  structure: ({ imageBase64 }) => ({
-    image: image(imageBase64),
-    prompt:
-      'You give rough, neutral estimates of face proportions from a front-facing ' +
-      'selfie. ' + PHOTO_RULES + ' Head tilt and camera angle change these numbers, ' +
-      'so set photoUsable=false unless the face is straight-on and level. Return ' +
-      'STRICT JSON: { "photoUsable": boolean, "photoIssue": string|null, ' +
-      '"seeDoctor": boolean, "seeDoctorReason": string|null, "canthalTilt": number ' +
-      '(degrees, outer eye corner relative to inner, negative = lower, range -6..6), ' +
-      '"midfaceRatio": number (0.95..1.20), "fluidRetention": "Low"|"Moderate"|"High" ' +
-      '(how puffy the face LOOKS in this photo only; puffiness changes with sleep, ' +
-      'salt and time of day) }. These are normal variations, not problems to fix.',
-  }),
-
-  insight: ({ canthalTilt, midfaceRatio, fluidRetention, barrierStatus }) => ({
-    prompt:
-      'You write for a calm, evidence-led skincare app. In ONE short, kind paragraph ' +
-      '(max 55 words, no bullet points, no numbers), describe this person\'s face ' +
-      'proportions as neutral, normal variation. Never rank attractiveness, never ' +
-      'call a feature a flaw, and never suggest that massage, skincare, gua sha or ' +
-      '"mewing" can change bone structure, eye shape or symmetry: they cannot. You ' +
-      'may mention that puffiness varies day to day and that gentle, consistent ' +
-      'skincare and daily sunscreen are what help skin. Inputs (rough estimates from ' +
-      `one photo) — eye tilt ${num(canthalTilt, 'canthalTilt')}°, midface ratio ` +
-      `${num(midfaceRatio, 'midfaceRatio').toFixed(2)}, puffiness ` +
-      `${optStr(fluidRetention, 'moderate', 20)}, skin feel (self-reported) ` +
-      `${optStr(barrierStatus, 'not checked', 60)}. Return STRICT JSON: { "insight": string }.`,
   }),
 
   'product-image': ({ imageBase64, barrierStatus }) => ({

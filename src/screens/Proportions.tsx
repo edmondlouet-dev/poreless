@@ -13,6 +13,7 @@ import { FaceLogo } from '../components/FaceLogo';
 import { PremiumModal } from '../components/PremiumModal';
 import { SkeletonLines } from '../components/Skeleton';
 import { analyzeStructuralFrame } from '../services/gemini';
+import { checkFacePhoto } from '../services/faceCheck';
 import { useStore } from '../store';
 import { C, R, T, S } from '../tokens';
 
@@ -94,11 +95,23 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
     setScanStep('scanning');
     try {
       let base64 = '';
+      let measuredTilt: number | null = null;
       if (permission?.granted && cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.6 });
         base64 = photo.base64 ?? '';
+        // On-device check first: angles are only comparable from a straight-on,
+        // level photo, and a bad one shouldn't cost an AI call or the free scan.
+        const check = await checkFacePhoto(photo.uri, photo.width, photo.height, 'structure');
+        if (check.issue) {
+          setNotice(`${check.issue}. Face the camera straight-on and level, in even light. Nothing was saved, and this didn't use your free scan.`);
+          setScanStep('camera');
+          return;
+        }
+        measuredTilt = check.canthalTilt;
       }
-      const result = await analyzeStructuralFrame(base64);
+      const ai = await analyzeStructuralFrame(base64);
+      // Eye tilt measured from real eye-corner landmarks beats the AI's estimate.
+      const result = measuredTilt !== null ? { ...ai, canthalTilt: measuredTilt } : ai;
       setLastSimulated(result.simulated);
       if (result.seeDoctor) {
         setNotice(`${result.seeDoctorReason ? result.seeDoctorReason + '. ' : ''}This is worth showing a GP or dermatologist. Poreless can't assess it.`);
@@ -128,7 +141,7 @@ export const Proportions: React.FC<Props> = ({ onOpenSettings }) => {
   const insights = [
     {
       title: `Eye tilt: ${structural.canthalTilt}° (${tiltLabel})`,
-      body: 'A rough estimate from one photo; head angle easily shifts it by a degree or two. ' +
+      body: 'Measured from your eye corners in one photo; small head turns shift it by a degree or so. ' +
         'Eye shape is set by bone and ligaments, and every shape is normal. Skincare and ' +
         'massage don\'t change it, so there is nothing here to fix.',
       tag: 'Info',

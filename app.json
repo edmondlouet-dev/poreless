@@ -9,7 +9,9 @@
     "splash": {
       "backgroundColor": "#FBFAF7"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.poreless.app"
@@ -25,6 +27,16 @@
       "favicon": "./assets/logo-face.png",
       "bundler": "metro"
     },
-    "plugins": ["expo-font"]
+    "plugins": [
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.5"
+          }
+        }
+      ]
+    ]
   }
 }

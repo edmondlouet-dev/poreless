@@ -11,6 +11,7 @@ import { FaceLogo } from '../components/FaceLogo';
 import { FlutedGlass } from '../components/FlutedGlass';
 import { MetricStrip } from '../components/MetricStrip';
 import { analyzeSkinFrame, type SkinAnalysis } from '../services/gemini';
+import { checkFacePhoto } from '../services/faceCheck';
 import { SKIN_FEEL, type SkinFeel } from '../skin';
 import { useStore } from '../store';
 import { C, R, T, S } from '../tokens';
@@ -46,6 +47,8 @@ export const Scan: React.FC = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [step, setStep]     = useState<Step>('preview');
   const [scores, setScores] = useState<SkinAnalysis | null>(null);
+  // Why the last photo needs a retake ('' = no specific reason), or null if it was fine.
+  const [retake, setRetake] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
 
   const feel = (Object.keys(SKIN_FEEL) as SkinFeel[])
@@ -59,9 +62,18 @@ export const Scan: React.FC = () => {
       if (permission?.granted && cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.6 });
         base64 = photo.base64 ?? '';
+        // On-device check first: a bad photo gets a retake without an AI call.
+        const check = await checkFacePhoto(photo.uri, photo.width, photo.height, 'skin');
+        if (check.issue) {
+          setScores(null);
+          setRetake(check.issue);
+          setStep('done');
+          return;
+        }
       }
       const result = await analyzeSkinFrame(base64);
       setScores(result);
+      setRetake(result.photoUsable ? null : (result.photoIssue ?? ''));
       // Only a real reading of a usable photo goes into history; demo numbers and
       // retake-needed photos would make the trend lines lie.
       if (!result.simulated && result.photoUsable) {
@@ -97,7 +109,7 @@ export const Scan: React.FC = () => {
   );
 
   const demo = scores ? scores.simulated : !geminiLive;
-  const usable = step === 'done' && scores && scores.photoUsable;
+  const usable = step === 'done' && retake === null && scores && scores.photoUsable;
 
   return (
     <View style={styles.root}>
@@ -198,11 +210,11 @@ export const Scan: React.FC = () => {
         )}
 
         {/* Photo not good enough: ask for a retake instead of guessing */}
-        {step === 'done' && scores && !scores.photoUsable && (
+        {step === 'done' && retake !== null && (
           <View style={[styles.aiMessage, { marginHorizontal: S.gutter }]}>
             <Text style={[T.kicker, { color: C.accent, marginBottom: 3 }]}>RETAKE FOR A RELIABLE READ</Text>
             <Text style={[T.bodySm, { color: C.ink2 }]}>
-              {scores.photoIssue ? `${scores.photoIssue[0]!.toUpperCase()}${scores.photoIssue.slice(1)}. ` : ''}
+              {retake ? `${retake[0]!.toUpperCase()}${retake.slice(1)}. ` : ''}
               Face the camera in even daylight, without filters. Nothing was saved.
             </Text>
           </View>

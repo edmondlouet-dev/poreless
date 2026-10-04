@@ -125,19 +125,19 @@ export const Lookmax: React.FC = () => {
         {[
           {
             title: 'Canthal Tilt: +2.3°',
-            body: 'Positive canthal tilt correlates with perceived attractiveness. Yours is mild positive — in the ideal range.',
+            body: 'A rough estimate from one photo. Eye shape is set by bone and ligaments, and every shape is normal.',
             tag: 'Good',
             tagVariant: 'sage',
           },
           {
             title: 'Jaw Width: Moderate',
-            body: 'A broader jaw-to-cheekbone ratio can be enhanced through facial exercises and lower body-fat levels.',
+            body: 'Jaw shape is mostly bone. Facial exercises have no good evidence of changing it.',
             tag: 'Moderate',
             tagVariant: 'warn',
           },
           {
             title: 'Midface Ratio: 1:1.1',
-            body: 'Midface length is well-proportioned. Mewing and proper tongue posture help maintain this long-term.',
+            body: 'Faces vary widely. There is no good evidence that mewing changes adult facial structure.',
             tag: 'Good',
             tagVariant: 'sage',
           },

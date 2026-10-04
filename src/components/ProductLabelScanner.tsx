@@ -13,7 +13,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal, ActivityIndicator, Animated,
+  View, Text, TouchableOpacity, StyleSheet, Modal, ActivityIndicator, Animated, Alert,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X, ScanText, ShoppingBag, Check, TriangleAlert } from 'lucide-react-native';
@@ -98,7 +98,12 @@ export const ProductLabelScanner: React.FC<Props> = ({
       setProduct(shelf);
       setPhase('preview');
     } catch {
+      // Never swap in a different product: ask for a clearer shot instead.
       setPhase('aim');
+      Alert.alert(
+        'Couldn\'t read this label',
+        'Try again with the ingredient list flat, in focus and well lit.',
+      );
     }
   };
 
@@ -126,7 +131,7 @@ export const ProductLabelScanner: React.FC<Props> = ({
           <View>
             <Text style={[T.kicker, { color: 'rgba(255,255,255,0.9)', letterSpacing: 2 }]}>SCAN PRODUCT LABEL</Text>
             <Text style={[T.kicker, { color: geminiLive ? '#5BD66E' : 'rgba(255,255,255,0.5)', fontSize: 8, marginTop: 3 }]}>
-              {geminiLive ? 'AI VISION · LIVE' : 'AI VISION · SIM'} · FREE
+              {geminiLive ? 'AI VISION · LIVE' : 'AI VISION · DEMO'} · FREE
             </Text>
           </View>
           <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.8}>

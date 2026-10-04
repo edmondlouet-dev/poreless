@@ -16,7 +16,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const { width: W } = Dimensions.get('window');
-const MAX_BAR_H = 80;
 
 // ── Per-metric deep dive: which region, what it means, what to do ──────────────
 type Zone = 'cheeks' | 'tzone' | 'undereye' | 'full' | 'jaw';
@@ -26,31 +25,31 @@ const SCORE_DETAIL: Record<string, ScoreDetail> = {
   Hydration: {
     zone: 'cheeks',
     region: 'Cheeks & midface',
-    meaning: 'Measures surface moisture and how plump the stratum corneum reads. The cheeks lose water fastest, so they set this score.',
+    meaning: 'How dry or flaky skin looks in the photo. A camera can\'t measure skin water content, so treat this as a rough visual cue.',
     tip: 'Apply hyaluronic acid to damp skin within 60s of cleansing, then seal with moisturiser to lock it in.',
   },
   Texture: {
     zone: 'full',
     region: 'Forehead & cheeks',
-    meaning: 'Reads micro-roughness and evenness across the face — the smoothness of light reflecting off the surface.',
+    meaning: 'How smooth the surface looks in the photo. Lighting angle changes it a lot, so compare scans taken in similar light.',
     tip: 'A gentle chemical exfoliant (PHA/lactic) 2× weekly smooths texture without disrupting the barrier.',
   },
   Pores: {
     zone: 'tzone',
     region: 'Nose & inner cheeks (T-zone)',
-    meaning: 'Estimates visible pore size and congestion. Pores read largest where sebaceous glands cluster — around the nose.',
+    meaning: 'How visible pores look, usually most around the nose where oil glands cluster. Pore size is largely genetic.',
     tip: 'Niacinamide and BHA keep pores clear; avoid heavy occlusives over the T-zone.',
   },
   Oil: {
     zone: 'tzone',
     region: 'Forehead, nose & chin',
-    meaning: 'Tracks sebum across the T-zone. A lower score means more shine and a higher risk of congestion.',
-    tip: 'Niacinamide regulates sebum by up to ~52% with consistent AM use. Don\'t over-strip — it rebounds oilier.',
+    meaning: 'How shiny the T-zone looks in the photo. A lower score means more visible shine.',
+    tip: 'Niacinamide may help with oiliness over several weeks. Use a gentle cleanser rather than stripping the skin.',
   },
   Calm: {
     zone: 'cheeks',
     region: 'Cheeks & around the nose',
-    meaning: 'Inverse of redness — diffuse flushing and reactivity concentrate on the cheeks and nasal folds.',
+    meaning: 'How little redness shows in the photo. Exercise, heat and cold all flush skin for a while, and redness is harder to read on deeper skin tones.',
     tip: 'Fragrance-free, barrier-first formulas (ceramides, centella) keep this high. Patch-test new actives.',
   },
 };
@@ -85,37 +84,6 @@ const FaceZone: React.FC<{ zone: Zone }> = ({ zone }) => {
         <Ellipse cx={30} cy={34} rx={16} ry={22} fill={hl} opacity={0.14} />
       )}
     </Svg>
-  );
-};
-
-const DAYS_DATA = [
-  { day: 'S', score: 71, isToday: false },
-  { day: 'M', score: 74, isToday: false },
-  { day: 'T', score: 72, isToday: false },
-  { day: 'W', score: 75, isToday: false },
-  { day: 'T', score: 76, isToday: false },
-  { day: 'F', score: 77, isToday: false },
-  { day: 'S', score: 78, isToday: true  },
-];
-
-const MiniAnimBar: React.FC<{ score: number; isToday: boolean; day: string; delay: number }> = ({
-  score, isToday, day, delay,
-}) => {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const t = setTimeout(() => {
-      Animated.timing(anim, { toValue: 1, duration: 500, useNativeDriver: false }).start();
-    }, delay);
-    return () => clearTimeout(t);
-  }, []);
-  const h = anim.interpolate({ inputRange: [0,1], outputRange: [0, (score/100)*MAX_BAR_H] });
-  return (
-    <View style={styles.barCol}>
-      <View style={[styles.barTrack, { height: MAX_BAR_H }]}>
-        <Animated.View style={[styles.bar, { backgroundColor: isToday ? C.accent : C.ink, height: h }]} />
-      </View>
-      <Text style={[T.kicker, { color: C.ink3, marginTop: 3, letterSpacing: 0, fontSize: 9 }]}>{day}</Text>
-    </View>
   );
 };
 
@@ -158,7 +126,8 @@ const InfoRow: React.FC<{ label: string; value: string; last?: boolean }> = ({ l
 
 export const You: React.FC<Props> = ({ onProducts, onSettings }) => {
   const insets = useSafeAreaInsets();
-  const { user, streak, lastScores, logout, questionnaireAnswers, faceMetrics } = useStore();
+  const { user, streak, lastScores, prevScores, logout, questionnaireAnswers, faceMetrics } = useStore();
+  const overallDelta = lastScores && prevScores ? lastScores.overall - prevScores.overall : null;
   const [openScore, setOpenScore] = useState<string | null>(null);
   const [infoModal, setInfoModal] = useState<InfoModal>(null);
 
@@ -219,17 +188,21 @@ export const You: React.FC<Props> = ({ onProducts, onSettings }) => {
         <FlutedGlass padding={14} style={{ marginBottom: 18 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
             <Text style={[T.num, { fontSize: 36, fontWeight: '700' }]}>
-              {lastScores?.overall ?? 78}
+              {lastScores?.overall ?? '—'}
             </Text>
-            <View style={{ backgroundColor: C.sageSoft, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={[T.pill, { color: C.sage }]}>+3 this week</Text>
-            </View>
+            {overallDelta !== null && (
+              <View style={{ backgroundColor: C.sageSoft, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2 }}>
+                <Text style={[T.pill, { color: C.sage }]}>
+                  {overallDelta >= 0 ? '+' : ''}{overallDelta} since last scan
+                </Text>
+              </View>
+            )}
           </View>
-          <View style={styles.chartRow}>
-            {DAYS_DATA.map((d, i) => (
-              <MiniAnimBar key={i} score={d.score} isToday={d.isToday} day={d.day} delay={i * 60} />
-            ))}
-          </View>
+          <Text style={[T.bodySm, { color: C.ink3, lineHeight: 17 }]}>
+            {lastScores
+              ? 'Appearance score from your latest scan. A daily trend chart arrives once scan history is saved.'
+              : 'Do your first face scan to see your appearance score here.'}
+          </Text>
         </FlutedGlass>
 
         {/* Metric scores — tap a row to expand the deep dive */}
@@ -238,13 +211,13 @@ export const You: React.FC<Props> = ({ onProducts, onSettings }) => {
           <Text style={[T.kicker, { color: C.ink4, fontSize: 8 }]}>TAP FOR DETAIL</Text>
         </View>
         <View style={{ gap: 6, marginBottom: 18 }}>
-          {[
-            { l: 'Hydration', v: lastScores?.hydration ?? 82 },
-            { l: 'Texture',   v: lastScores?.texture   ?? 74 },
-            { l: 'Pores',     v: lastScores?.pores      ?? 69 },
-            { l: 'Oil',       v: lastScores?.oil        ?? 55 },
-            { l: 'Calm',      v: lastScores?.redness    ?? 88 },
-          ].map(m => {
+          {(lastScores ? [
+            { l: 'Hydration', v: lastScores.hydration, p: prevScores?.hydration },
+            { l: 'Texture',   v: lastScores.texture,   p: prevScores?.texture },
+            { l: 'Pores',     v: lastScores.pores,     p: prevScores?.pores },
+            { l: 'Oil',       v: lastScores.oil,       p: prevScores?.oil },
+            { l: 'Calm',      v: lastScores.redness,   p: prevScores?.redness },
+          ] : []).map(m => {
             const isOpen = openScore === m.l;
             const detail = SCORE_DETAIL[m.l];
             return (
@@ -253,10 +226,11 @@ export const You: React.FC<Props> = ({ onProducts, onSettings }) => {
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={[T.kicker, { flex: 1 }]}>{m.l}</Text>
                     <View style={styles.miniBarRow}>
-                      {[0.6, 0.65, 0.68, 0.7, 0.72, 0.74, m.v/100].map((p, i) => (
+                      {/* Previous scan (grey) and latest (accent): real readings only */}
+                      {(m.p !== undefined ? [m.p, m.v] : [m.v]).map((v, i, all) => (
                         <View key={i} style={[styles.microBar, {
-                          height: Math.round(14 * p),
-                          backgroundColor: i === 6 ? C.accent : C.surface3,
+                          height: Math.round(14 * v / 100),
+                          backgroundColor: i === all.length - 1 ? C.accent : C.surface3,
                         }]} />
                       ))}
                     </View>
@@ -280,7 +254,7 @@ export const You: React.FC<Props> = ({ onProducts, onSettings }) => {
                         </Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[T.kicker, { color: C.ink3, marginBottom: 4 }]}>WHAT THIS MEASURES</Text>
+                        <Text style={[T.kicker, { color: C.ink3, marginBottom: 4 }]}>WHAT THIS SHOWS</Text>
                         <Text style={[T.bodySm, { color: C.ink2, lineHeight: 17 }]}>{detail.meaning}</Text>
                       </View>
                     </View>
@@ -352,10 +326,10 @@ export const You: React.FC<Props> = ({ onProducts, onSettings }) => {
                 </FlutedGlass>
                 <Text style={[T.kicker, { marginBottom: 8 }]}>LATEST STRUCTURAL READ</Text>
                 <FlutedGlass padding={14}>
-                  <InfoRow label="Canthal tilt" value={`${faceMetrics.canthalTilt}°`} />
-                  <InfoRow label="Midface ratio" value={faceMetrics.midfaceRatio.toFixed(2)} />
-                  <InfoRow label="Fluid retention" value={faceMetrics.fluidRetention} />
-                  <InfoRow label="Barrier" value={faceMetrics.barrierStatus} last />
+                  <InfoRow label="Eye tilt (rough)" value={`${faceMetrics.canthalTilt}°`} />
+                  <InfoRow label="Midface ratio (rough)" value={faceMetrics.midfaceRatio.toFixed(2)} />
+                  <InfoRow label="Puffiness" value={faceMetrics.fluidRetention} />
+                  <InfoRow label="Skin feel (you said)" value={faceMetrics.barrierStatus} last />
                 </FlutedGlass>
                 <Text style={[T.bodySm, { color: C.ink4, marginTop: 14, lineHeight: 17 }]}>
                   Your profile shapes the routine, gaps, and daily brief. Re-run a scan any time to update it.

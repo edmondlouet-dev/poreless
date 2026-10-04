@@ -33,12 +33,12 @@ const SCORE_FIELDS: { key: string; label: string; field: keyof SkinScores }[] = 
 ];
 
 const WHY: Partial<Record<string, string>> = {
-  spf:         'UV index 6 today. SPF reduces UV-induced free radicals and prevents hyperpigmentation. Reapply every 2h outdoors.',
-  antiox:      'Vitamin C neutralises free radicals. Layered before SPF it amplifies photoprotection by up to 8x.',
+  spf:         'UV index 6 today. Daily SPF is the best-evidenced way to slow sun-related skin ageing and dark spots. Reapply every 2h outdoors.',
+  antiox:      'Vitamin C is an antioxidant. Worn under SPF it can add some extra protection; it does not replace sunscreen.',
   serum:       'Treatment serums go on after cleansing so actives penetrate before heavier occlusives seal them out.',
   cleanser:    'A gentle cleanser removes overnight sebum without stripping the barrier.',
-  moisturizer: 'Locking in moisture is non-negotiable. A compromised barrier lets everything else work less effectively.',
-  retinoid:    'Adapalene accelerates cell turnover. PM only — UV degrades retinoids and increases photosensitivity.',
+  moisturizer: 'Moisturiser holds water in the outer layer of skin and helps it feel comfortable, especially alongside actives.',
+  retinoid:    'Adapalene speeds up skin cell turnover. Use it at night, wear SPF by day, and avoid retinoids during pregnancy.',
 };
 
 // How each product type is applied — drives the in-Ambient AR guide.
@@ -65,7 +65,7 @@ const BROWSE_URLS: Record<ProductCategory, string> = {
 const CONCERN_INSIGHT: Record<string, string> = {
   acne:      'Your goal is clearer skin — a BHA exfoliant 2–3×/week keeps pores clear; pair with niacinamide AM.',
   dryness:   'You flagged dryness — layer hyaluronic acid on damp skin, then seal with a ceramide moisturiser.',
-  darkspots: 'For dark spots, Vitamin C every morning under SPF fades pigment faster than either alone.',
+  darkspots: 'For dark spots, daily SPF matters most; Vitamin C each morning underneath may help them fade.',
   texture:   'For texture & pores, alternate a gentle exfoliant with retinoid nights — never the same evening.',
   redness:   'You flagged sensitivity — keep it barrier-first: ceramides, centella, and fragrance-free formulas.',
   aging:     'For fine lines, a nightly retinoid plus daily SPF is the most evidence-backed pairing there is.',
@@ -78,14 +78,15 @@ function getDailyInsight(scores: any, uv: number, tempUnit: string, concern?: st
   }
   if (!scores) return `UV ${uv} today — your SPF is your single most important product.`;
   if (scores.hydration < 70)
-    return `Hydration ${scores.hydration} — apply HA serum within 60 sec of cleansing. Damp skin absorbs 2x more.`;
-  if (scores.oil > 70)
-    return `Oil elevated (${scores.oil}). Niacinamide regulates sebum by up to 52% with consistent AM use.*`;
+    return `Skin looked a little dry in your last scan (${scores.hydration}). Apply hyaluronic acid to slightly damp skin, then moisturiser.`;
+  // Oil is scored higher = less shiny, so a LOW number means a shiny T-zone.
+  if (scores.oil < 55)
+    return `Your T-zone looked shiny in your last scan (${scores.oil}). Niacinamide may help with oiliness over several weeks.`;
   if (scores.acne < 65)
-    return `Acne score ${scores.acne}. BHA (salicylic acid) penetrates pores and reduces comedones by ~50% in 8 weeks.*`;
+    return `Some visible spots in your last scan (${scores.acne}). Salicylic acid (BHA) can help keep pores clear; give it 6–8 weeks.`;
   if (uv >= 6)
-    return `UV ${uv} — free radicals peak 10am–2pm. Consistent SPF use reduces photoaging markers by up to 24%.*`;
-  return `Skin score ${scores.overall} — barrier health is strong. Consistency compounds: 90 days beats any serum.`;
+    return `UV ${uv} today. In a 4.5-year trial, daily sunscreen users showed about 24% less skin ageing.*`;
+  return `Appearance ${scores.overall} in your last scan. Consistency compounds: give any routine 8–12 weeks.`;
 }
 
 export const Today: React.FC = () => {
@@ -212,7 +213,7 @@ export const Today: React.FC = () => {
   // active-vs-barrier check so the banner still works in simulation.
   const HARSH = ['retinol', 'retinyl', 'tretinoin', 'adapalene', 'glycolic acid',
     'salicylic acid', 'benzoyl peroxide', 'ascorbic acid', 'vitamin c', 'lactic acid'];
-  const barrierFatigued = /sensiti|fatig/i.test(faceMetrics.barrierStatus);
+  const barrierFatigued = /sensiti/i.test(faceMetrics.barrierStatus);
   const flaggedProduct  = userShelf.find(p => !!p.warningText);
   const conflictProduct = flaggedProduct ?? (barrierFatigued
     ? userShelf.find(p => p.ingredients.some(i => HARSH.some(h => i.toLowerCase().includes(h))))
@@ -287,8 +288,8 @@ export const Today: React.FC = () => {
           {lastScores && (
             <View style={{ flexDirection: 'row', gap: 0, marginTop: 12 }}>
               {[
-                { label: 'SKIN SCORE', value: String(lastScores.overall) },
-                { label: 'HYDRATION',  value: String(lastScores.hydration) },
+                { label: 'APPEARANCE', value: String(lastScores.overall) },
+                { label: 'NOT DRY',    value: String(lastScores.hydration) },
                 { label: 'STREAK',     value: `${streak}d` },
               ].map((s, i) => (
                 <View key={s.label} style={[
@@ -302,7 +303,7 @@ export const Today: React.FC = () => {
             </View>
           )}
           <Text style={[T.bodySm, { color: C.ink4, fontSize: 9, marginTop: 8 }]}>
-            * Peer-reviewed research. Not medical advice. Individual results vary.
+            * Hughes et al., Annals of Internal Medicine, 2013. Scores are cosmetic estimates, not medical advice.
           </Text>
         </FlutedGlass>
 
@@ -358,8 +359,8 @@ export const Today: React.FC = () => {
               <Text style={{ fontWeight: '600' }}>{conflictProduct.name}</Text>
               {conflictCopy
                 ? <> — {conflictCopy}</>
-                : <> has <Text style={{ fontWeight: '600' }}>{conflictActive}</Text>. Your barrier reads{' '}
-                    {faceMetrics.barrierStatus.toLowerCase()} — ease it back in once calm.</>}
+                : <> has <Text style={{ fontWeight: '600' }}>{conflictActive}</Text>. You said your skin{' '}
+                    {faceMetrics.barrierStatus.toLowerCase()}, so ease it back in once it feels comfortable.</>}
             </Text>
           </FlutedGlass>
         )}

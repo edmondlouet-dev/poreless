@@ -136,12 +136,12 @@ export const Settings: React.FC<Props> = ({ onBack }) => {
               <View style={[styles.statusDot, { backgroundColor: geminiLive ? C.sage : C.ink4 }]} />
               <View style={{ flex: 1 }}>
                 <Text style={[T.body, { fontWeight: '500' }]}>
-                  Poreless AI · {geminiLive ? 'Live' : 'Simulation'}
+                  Poreless AI · {geminiLive ? 'Live' : 'Demo'}
                 </Text>
                 <Text style={[T.bodySm, { color: C.ink3, marginTop: 2, lineHeight: 17 }]}>
                   {geminiLive
-                    ? 'Connected — scans, label reads and editorial insights run on the live model.'
-                    : 'No verified key — every feature runs a realistic on-device simulation. Add an AIza Gemini key to .env to go live.'}
+                    ? 'Connected. Scans and label reads run on the live model; if a call fails you\'ll be asked to retry, never shown made-up results.'
+                    : 'Not connected. Scans show demo data, clearly labelled and never saved. Set EXPO_PUBLIC_PROXY_URL to go live.'}
                 </Text>
               </View>
             </View>

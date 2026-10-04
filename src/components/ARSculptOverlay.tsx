@@ -61,7 +61,7 @@ const GUIDES: Record<ARMotion, Guide> = {
       { d: 'M 34 56 C 30 76 34 96 40 110', head: head(40, 110, 70) },
     ],
     press: [],
-    cue: 'Trace down — inner brow → jaw → collarbone. Three slow passes per side.',
+    cue: 'Sweep gently down from the inner brow along the jaw. Three slow passes per side.',
   },
   sculpt: {
     arrows: [
@@ -69,7 +69,7 @@ const GUIDES: Record<ARMotion, Guide> = {
       { d: 'M 48 74 C 36 66 28 54 20 42', head: head(20, 42, -123) },
     ],
     press: [],
-    cue: 'Sculpt the fuller cheek up toward the temple — fewer passes on the lighter side.',
+    cue: 'Smooth product up from the chin toward the temples with light strokes.',
   },
   lift: {
     arrows: [
@@ -77,12 +77,12 @@ const GUIDES: Record<ARMotion, Guide> = {
       { d: 'M 36 52 C 28 48 22 44 16 38', head: head(16, 38, -140) },
     ],
     press: [],
-    cue: 'Press up-and-out from the outer eye corner toward the brow tail — never inward.',
+    cue: 'Tap eye cream on with your ring finger — never drag the skin around the eye.',
   },
   soothe: {
     arrows: [],
     press: [{ x: 36, y: 66 }, { x: 64, y: 66 }, { x: 50, y: 88 }],
-    cue: 'Press — don\'t rub — the final layer in with warm palms to seal and calm.',
+    cue: 'Press — don\'t rub — the final layer in with clean palms.',
   },
   // ── product application motions ─────────────────────────────────────────────
   apply: {
@@ -107,7 +107,7 @@ const GUIDES: Record<ARMotion, Guide> = {
 };
 
 const LABEL: Record<ARMotion, string> = {
-  drainage: 'LYMPHATIC DRAINAGE', sculpt: 'CHEEK SCULPT', lift: 'EYE LIFT', soothe: 'BARRIER PRESS',
+  drainage: 'GENTLE SWEEP', sculpt: 'SMOOTH UPWARD', lift: 'EYE TAP', soothe: 'PRESS IN',
   apply: 'SMOOTH OUTWARD', press: 'PRESS & SEAL', pat: 'PAT TO ABSORB',
 };
 

@@ -2,52 +2,30 @@
  * Gemini engine — the app's "intelligence" layer.
  *
  * Every function has two paths:
- *   • LIVE  — when GEMINI_ENABLED is true and a real key is set, it calls the
- *             Gemini REST API and parses the structured response.
+ *   • LIVE  — when EXPO_PUBLIC_PROXY_URL is set, it asks the Poreless proxy,
+ *             which calls Gemini, and parses the structured response.
  *   • SIM   — otherwise it returns a realistic, INPUT-DEPENDENT simulation so
  *             the UX is identical and nothing is hard-coded to one answer.
  *
- * To go live: paste a key into config/firebase.ts and set GEMINI_ENABLED = true.
- * No other code changes are needed.
+ * The app never sees the Gemini key. LIVE calls go to the Poreless proxy
+ * (proxy/gemini.js), which holds the key, model and prompts. Set
+ * EXPO_PUBLIC_PROXY_URL to go live. No other code changes are needed.
  */
-import { GEMINI_API_KEY, GEMINI_ENABLED, GEMINI_MODEL } from '../config/firebase';
-
-// Google API keys start with "AIza" and auth via the ?key= query param.
-// Anything else (e.g. an "AQ."/OAuth-style access token) is sent as a Bearer
-// header instead, so both credential shapes have a chance at the live path.
-const IS_API_KEY = GEMINI_API_KEY.startsWith('AIza');
-
-const ENDPOINT = (model: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` +
-  (IS_API_KEY ? `?key=${GEMINI_API_KEY}` : '');
-
-function authHeaders(): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (!IS_API_KEY) h['Authorization'] = `Bearer ${GEMINI_API_KEY}`;
-  return h;
-}
+import { AI_ENABLED, AI_PROXY_URL } from '../config/firebase';
 
 function keyReady(): boolean {
-  return GEMINI_ENABLED && !!GEMINI_API_KEY && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY';
+  return AI_ENABLED;
 }
 
-// Health check: does the configured key actually authenticate against the
-// generateContent REST endpoint? The UI uses this for a truthful LIVE/SIM badge
-// instead of assuming "key present == working" — important for AQ.-style tokens,
-// which can be short-lived or scoped to a different API.
+// Health check: is the proxy reachable and does it have a Gemini key? The UI
+// uses this for a truthful LIVE/SIM badge instead of assuming "URL set == working".
 export async function verifyGeminiKey(): Promise<boolean> {
   if (!keyReady()) return false;
   try {
-    const res = await fetch(ENDPOINT(GEMINI_MODEL), {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Return STRICT JSON {"ok":true}.' }] }],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    return res.ok;
+    const res = await fetch(`${AI_PROXY_URL}/ai/health`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data?.live === true;
   } catch {
     return false;
   }
@@ -64,23 +42,17 @@ function hashString(s: string): number {
   return Math.abs(h);
 }
 
-async function callGemini(prompt: string, imageBase64?: string): Promise<string> {
-  const parts: any[] = [{ text: prompt }];
-  if (imageBase64) {
-    parts.push({ inline_data: { mime_type: 'image/jpeg', data: imageBase64 } });
-  }
-  const res = await fetch(ENDPOINT(GEMINI_MODEL), {
+// Runs one AI task on the proxy and returns the model's parsed JSON. The proxy
+// builds the prompt, so the app only sends that task's inputs.
+async function callAI(task: string, input: Record<string, unknown>): Promise<any> {
+  const res = await fetch(`${AI_PROXY_URL}/ai/${task}`, {
     method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { temperature: 0.4, responseMimeType: 'application/json' },
-    }),
-    signal: AbortSignal.timeout(12000),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(20000),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const data = await res.json();
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  if (!res.ok) throw new Error(`AI ${task} ${res.status}`);
+  return res.json();
 }
 
 // ── 1. Product profile from a label OCR string ─────────────────────────────────
@@ -121,21 +93,14 @@ const SIM_PROFILES: ProductProfile[] = [
 
 /**
  * Takes the raw text a label OCR pass would yield and returns a clean,
- * structured product profile. LIVE: Gemini parses it. SIM: picks a luxury
- * profile deterministically from the OCR text so different labels → different
- * products (and the same label is stable).
+ * structured product profile. LIVE: Gemini parses it (via the proxy). SIM:
+ * picks a luxury profile deterministically from the OCR text so different
+ * labels → different products (and the same label is stable).
  */
 export async function profileFromLabelText(ocrText: string): Promise<ProductProfile> {
   if (keyReady()) {
     try {
-      const prompt =
-        'You are a cosmetic-label parser. From the following OCR text of a skincare ' +
-        'product label, return STRICT JSON with keys: name (string), brand (string), ' +
-        'ingredients (array of lowercase INCI strings, max 12), category (one of: ' +
-        'cleanser, antiox, serum, exfoliant, retinoid, moisturizer, spf). ' +
-        'If a field is unknown, infer the most likely value. OCR TEXT:\n' + ocrText;
-      const raw = await callGemini(prompt);
-      const parsed = JSON.parse(raw);
+      const parsed = await callAI('label-text', { ocrText });
       return {
         name: String(parsed.name ?? 'Unknown Product'),
         brand: String(parsed.brand ?? ''),
@@ -177,16 +142,7 @@ export async function analyzeSkinFrame(
 ): Promise<SkinAnalysis> {
   if (keyReady() && imageBase64) {
     try {
-      const prompt =
-        'You are a dermatology-grade skin analyzer. Score this selfie 0-100 for: ' +
-        'overall, hydration, texture, pores, redness (higher = calmer), oil ' +
-        '(higher = balanced), acne (higher = clearer), tone. Also rate light ' +
-        '(Low/Even/Bright) and estimate camera distanceCm. Consider these user-' +
-        'flagged concerns: ' + (flaggedConcerns.join(', ') || 'none') + '. ' +
-        'Return STRICT JSON with those keys plus confidence (0-1) and a one-line ' +
-        'message field.';
-      const raw = await callGemini(prompt, imageBase64);
-      const p = JSON.parse(raw);
+      const p = await callAI('skin', { imageBase64, flaggedConcerns });
       return {
         overall: clamp(p.overall), hydration: clamp(p.hydration), texture: clamp(p.texture),
         pores: clamp(p.pores), redness: clamp(p.redness), oil: clamp(p.oil),
@@ -265,13 +221,7 @@ export interface StructuralAnalysis {
 export async function analyzeStructuralFrame(imageBase64: string): Promise<StructuralAnalysis> {
   if (keyReady() && imageBase64) {
     try {
-      const prompt =
-        'You are a facial-proportions analyst. From this front-facing selfie return ' +
-        'STRICT JSON: canthalTilt (degrees, negative = downward, range -6..6), ' +
-        'midfaceRatio (0.95..1.20), fluidRetention (Low/Moderate/High), ' +
-        'barrierStatus (short phrase e.g. "Healthy / Resilient" or "Sensitive / Fatigued").';
-      const raw = await callGemini(prompt, imageBase64);
-      const p = JSON.parse(raw);
+      const p = await callAI('structure', { imageBase64 });
       return {
         canthalTilt: Math.max(-6, Math.min(6, Number(p.canthalTilt) || 0)),
         midfaceRatio: Math.max(0.95, Math.min(1.2, Number(p.midfaceRatio) || 1.05)),
@@ -334,16 +284,7 @@ export interface EditorialMetrics {
 export async function generateEditorialInsight(metrics: EditorialMetrics): Promise<string> {
   if (keyReady()) {
     try {
-      const prompt =
-        'You are the lead writer for a luxury skincare magazine. In ONE warm, ' +
-        'elegant paragraph (max 55 words, no bullet points, no numbers repeated ' +
-        'mechanically), interpret this reader\'s facial geometry in a comforting, ' +
-        'premium tone that makes them feel seen and capable. Metrics — canthal ' +
-        `tilt ${metrics.canthalTilt}°, midface ratio ${metrics.midfaceRatio.toFixed(2)}, ` +
-        `fluid retention ${metrics.fluidRetention ?? 'moderate'}, barrier ` +
-        `${metrics.barrierStatus ?? 'balanced'}. Return STRICT JSON: { "insight": string }.`;
-      const raw = await callGemini(prompt);
-      const p = JSON.parse(raw);
+      const p = await callAI('insight', { ...metrics });
       if (p?.insight) return String(p.insight).trim();
     } catch {
       /* fall through to sim */
@@ -428,20 +369,7 @@ export async function analyzeProductFromImage(
 ): Promise<ProductConflict> {
   if (keyReady() && imageBase64) {
     try {
-      const prompt =
-        'You are an expert cosmetic chemist reading a skincare product label from ' +
-        'this photo. Read the brand, product name, and the visible ingredient list. ' +
-        'Return STRICT JSON: { "readable": boolean, "brand": string, "name": string, ' +
-        '"ingredients": string[] (lowercase INCI, max 12), "category": one of ' +
-        'cleanser|antiox|serum|exfoliant|retinoid|moisturizer|spf, "conflictDetected": ' +
-        'boolean, "warningText": string|null }. Set readable=false if the label text ' +
-        'truly cannot be made out. The user\'s barrier status is "' + barrierStatus +
-        '". Set conflictDetected true ONLY if the product contains a strong active ' +
-        '(retinoid, AHA/BHA, benzoyl peroxide, high-dose vitamin C) AND the barrier ' +
-        'reads sensitive or fatigued. warningText: one short, reassuring sentence on ' +
-        'how to ease it in, else null.';
-      const raw = await callGemini(prompt, imageBase64);
-      const p = JSON.parse(raw);
+      const p = await callAI('product-image', { barrierStatus, imageBase64 });
       const ingredients = Array.isArray(p.ingredients)
         ? p.ingredients.map((s: any) => String(s).toLowerCase()).slice(0, 12) : [];
       if (p.readable !== false && ingredients.length > 0) {
@@ -469,18 +397,7 @@ export async function analyzeProductConflict(
 ): Promise<ProductConflict> {
   if (keyReady()) {
     try {
-      const prompt =
-        'You are an expert cosmetic chemist. From the OCR label text below, return ' +
-        'STRICT JSON: { "brand": string, "name": string, "ingredients": string[] ' +
-        '(lowercase INCI, max 12), "category": one of cleanser|antiox|serum|' +
-        'exfoliant|retinoid|moisturizer|spf, "conflictDetected": boolean, ' +
-        '"warningText": string | null }. The user\'s barrier status is "' +
-        barrierStatus + '". Set conflictDetected true ONLY if the product contains ' +
-        'a strong active (retinoid, AHA/BHA, benzoyl peroxide, high-dose vitamin C) ' +
-        'AND the barrier reads sensitive or fatigued. warningText: one short, ' +
-        'reassuring sentence on how to ease it in, else null.\nOCR TEXT:\n' + rawLabelText;
-      const raw = await callGemini(prompt);
-      const p = JSON.parse(raw);
+      const p = await callAI('product-text', { barrierStatus, rawLabelText });
       const ingredients = Array.isArray(p.ingredients)
         ? p.ingredients.map((s: any) => String(s).toLowerCase()).slice(0, 12) : [];
       return {

@@ -84,7 +84,7 @@ src/
 assets/
   scan-portrait.png     — line-art face portrait placeholder
   logo-face.png         — logo raster fallback
-proxy/                  — small Node server that keeps the INCI API key off the phone
+proxy/                  — small Node server that keeps the Gemini and INCI keys off the phone
 design/
   liquid-glass.html     — Liquid Glass HTML prototype
 legacy/
@@ -93,12 +93,15 @@ legacy/
 
 ## API keys
 
-Copy `.env.example` to `.env` and add your Gemini key. `.env` is gitignored.
-For the INCI proxy, copy `proxy/.env.example` to `proxy/.env`.
+The app never holds an API key. Gemini and INCI calls go through `proxy/`,
+which keeps the keys on the server.
 
-Note: anything prefixed `EXPO_PUBLIC_` is built into the app bundle, so the Gemini
-key is readable by anyone who installs the app. Fine for development; route Gemini
-through `proxy/` before shipping to real users.
+1. Copy `proxy/.env.example` to `proxy/.env` and add your Gemini (and INCI) key.
+2. Run the proxy: `cd proxy && npm install && npm start`.
+3. Copy `.env.example` to `.env` and set `EXPO_PUBLIC_PROXY_URL` to the proxy's
+   address. Without it, every AI feature uses its built-in simulation.
+
+Anything prefixed `EXPO_PUBLIC_` is built into the app, so never put a key there.
 
 ---
 

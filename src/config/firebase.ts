@@ -37,24 +37,13 @@ export const VISION_API_KEY = 'YOUR_GOOGLE_VISION_API_KEY';
 export const VISION_ENABLED = false;
 
 /**
- * Gemini API key — powers the AI Label Recognizer (OCR → structured product
- * profile), smarter skin analysis, and AR step-completion detection.
+ * AI (Gemini) — powers the AI Label Recognizer, skin and proportions analysis,
+ * and editorial insights.
  *
- * HOW TO GET ONE (free tier):
- *  1. Go to https://aistudio.google.com/app/apikey
- *  2. Create an API key
- *  3. Paste it below and flip GEMINI_ENABLED to true
- *
- * Until then every Gemini-backed feature runs a realistic local simulation,
- * so nothing crashes and the UX is identical. Dropping the key in here is the
- * only change needed to go live.
+ * The app never holds the Gemini key: every call goes through the Poreless
+ * proxy (proxy/), which keeps the key, model and prompts on the server. Set
+ * EXPO_PUBLIC_PROXY_URL in your gitignored `.env` to turn live AI on; without
+ * it every Gemini-backed feature runs its local simulation.
  */
-// The key is read from EXPO_PUBLIC_GEMINI_KEY in your gitignored `.env` (never
-// hard-coded here, never committed). LIVE turns on automatically the moment a
-// real key is present; otherwise every Gemini feature runs its local simulation.
-export const GEMINI_API_KEY =
-  process.env.EXPO_PUBLIC_GEMINI_KEY ?? 'YOUR_GEMINI_API_KEY';
-export const GEMINI_MODEL =
-  process.env.EXPO_PUBLIC_GEMINI_MODEL ?? 'gemini-2.5-flash';
-export const GEMINI_ENABLED =
-  !!GEMINI_API_KEY && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY';
+export const AI_PROXY_URL = process.env.EXPO_PUBLIC_PROXY_URL ?? '';
+export const AI_ENABLED = !!AI_PROXY_URL;

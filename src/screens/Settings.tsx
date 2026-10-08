@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert,
 } from 'react-native';
@@ -7,6 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Background } from '../components/Background';
 import { FlutedGlass } from '../components/FlutedGlass';
 import { useStore } from '../store';
+import { AI_LIMITS } from '../limits';
+import { shareBackup, pickBackup, unpackBackup } from '../services/backup';
+import { BILLING_LIVE, PRICE_LABEL, restore } from '../services/purchases';
+import { shortDate } from '../dates';
 import { C, R, T, S } from '../tokens';
 
 const BackArrow = () => (
@@ -20,7 +24,66 @@ interface Props { onBack: () => void }
 
 export const Settings: React.FC<Props> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  const { geminiLive, resetApp } = useStore();
+  const store = useStore();
+  const {
+    geminiLive, resetApp, isPremium, aiLeft, openPremiumModal, setPremiumStatus, restoreData,
+    questionnaireAnswers,
+  } = store;
+  const [busy, setBusy] = useState<'backup' | 'restore' | 'purchase' | null>(null);
+  const plan = AI_LIMITS[isPremium ? 'premium' : 'free'];
+
+  const backUp = async () => {
+    if (!isPremium) return openPremiumModal('backup');
+    setBusy('backup');
+    try {
+      await shareBackup({
+        skinFeel: store.skinFeel, shelf: store.shelf, scans: store.scans, completions: store.completions,
+        doneSteps: store.doneSteps, trials: store.trials, spfReapplyAt: store.spfReapplyAt,
+        premium: store.premium, aiUsage: store.aiUsage,
+      }, questionnaireAnswers);
+    } catch {
+      Alert.alert('Backup didn\'t finish', 'Nothing was changed. Try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Restoring is free: a backup is the user's own data.
+  const restoreBackup = async () => {
+    let picked;
+    try { picked = await pickBackup(); } catch {
+      return Alert.alert('Not a Poreless backup', 'Pick the .json file that Back up made.');
+    }
+    if (!picked) return;
+    Alert.alert(
+      'Restore this backup?',
+      `From ${shortDate(picked.createdAt)} with ${picked.photoCount} photos. It replaces the shelf, photos and history on this phone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', style: 'destructive', onPress: async () => {
+          setBusy('restore');
+          try {
+            const { data, answers } = await unpackBackup(picked.file);
+            restoreData(data, answers);
+            Alert.alert('Restored', 'Your photos and history are back.');
+          } catch {
+            Alert.alert('Restore didn\'t finish', 'Try again with the same file.');
+          } finally {
+            setBusy(null);
+          }
+        } },
+      ],
+    );
+  };
+
+  const restorePurchase = async () => {
+    setBusy('purchase');
+    const ok = await restore();
+    setBusy(null);
+    if (ok) setPremiumStatus(true);
+    Alert.alert(ok ? 'Premium restored' : 'No subscription found',
+      ok ? 'Thanks for subscribing.' : 'This store account doesn\'t have an active Poreless Premium subscription.');
+  };
 
   const confirmReset = () => {
     Alert.alert(
@@ -72,6 +135,52 @@ export const Settings: React.FC<Props> = ({ onBack }) => {
             </View>
           </FlutedGlass>
 
+          {/* Plan */}
+          <Text style={[T.kicker, { marginBottom: 8 }]}>PLAN</Text>
+          <FlutedGlass padding={14} style={{ marginBottom: 10 }}>
+            <Text style={[T.body, { fontWeight: '500' }]}>
+              {isPremium ? 'Premium' : 'Free'}{isPremium ? '' : ` · Premium is ${PRICE_LABEL}/month`}
+            </Text>
+            <Text style={[T.bodySm, { color: C.ink3, marginTop: 4, lineHeight: 17 }]}>
+              This month: {aiLeft('face')} of {plan.face} face scans and {aiLeft('label')} of {plan.label} label
+              reads left. Resets on the 1st.
+            </Text>
+            {!isPremium && (
+              <TouchableOpacity onPress={() => openPremiumModal('scans')} style={{ marginTop: 10 }} activeOpacity={0.7}>
+                <Text style={[T.button, { color: C.accentInk, fontSize: 13 }]}>See Premium →</Text>
+              </TouchableOpacity>
+            )}
+            {BILLING_LIVE && (
+              <TouchableOpacity onPress={restorePurchase} disabled={!!busy} style={{ marginTop: 10 }} activeOpacity={0.7}>
+                <Text style={[T.bodySm, { color: C.ink3, textDecorationLine: 'underline' }]}>
+                  {busy === 'purchase' ? 'Checking…' : 'Restore purchase'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {isPremium && BILLING_LIVE && (
+              <Text style={[T.bodySm, { color: C.ink4, fontSize: 11, marginTop: 8, lineHeight: 16 }]}>
+                Cancel any time in your App Store or Google Play subscriptions.
+              </Text>
+            )}
+          </FlutedGlass>
+
+          {/* Backup */}
+          <Text style={[T.kicker, { marginBottom: 8, marginTop: 8 }]}>BACKUP</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+            <TouchableOpacity style={[styles.dataBtn, { flex: 1 }]} onPress={backUp} disabled={!!busy} activeOpacity={0.85}>
+              <Text style={[T.button, { color: C.ink, fontSize: 13 }]}>
+                {busy === 'backup' ? 'Packing…' : `Back up${isPremium ? '' : ' · Premium'}`}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.dataBtn, { flex: 1 }]} onPress={restoreBackup} disabled={!!busy} activeOpacity={0.85}>
+              <Text style={[T.button, { color: C.ink, fontSize: 13 }]}>{busy === 'restore' ? 'Restoring…' : 'Restore'}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[T.bodySm, { color: C.ink4, fontSize: 11, marginBottom: 18, lineHeight: 16 }]}>
+            Back up saves one file with your photos, shelf and history. Choose iCloud Drive, Google Drive
+            or Files when the share sheet opens. Restore works on any plan.
+          </Text>
+
           {/* App info */}
           <Text style={[T.kicker, { marginBottom: 8 }]}>ABOUT</Text>
           <FlutedGlass padding={14} style={{ marginBottom: 18 }}>
@@ -104,6 +213,10 @@ const styles = StyleSheet.create({
   backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: S.gutter },
   statusDot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
+  dataBtn: {
+    borderWidth: 1, borderColor: C.line2, borderRadius: R.md,
+    paddingVertical: 13, alignItems: 'center', backgroundColor: C.surface,
+  },
   resetBtn: {
     borderWidth: 1, borderColor: C.danger + '55', borderRadius: R.md,
     paddingVertical: 13, alignItems: 'center', backgroundColor: '#FBEEEA',

@@ -9,15 +9,15 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Modal, Alert,
   useWindowDimensions,
 } from 'react-native';
-import { Play, X, CalendarDays } from 'lucide-react-native';
+import { Play, X, CalendarDays, FileText } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Background } from '../components/Background';
 import { FlutedGlass } from '../components/FlutedGlass';
 import { MetricStrip } from '../components/MetricStrip';
-import { PremiumModal } from '../components/PremiumModal';
 import { ScoreDetails } from '../components/ScoreDetails';
 import { TrendChart } from '../components/TrendChart';
 import { MonthlyRecap } from '../components/MonthlyRecap';
+import { shareReport } from '../services/report';
 import { Scan } from './Scan';
 import { useStore, type ScanEntry, type SkinScores } from '../store';
 import { shortDate } from '../dates';
@@ -40,9 +40,10 @@ export const Progress: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const {
-    scans, lastScores, prevScores, deleteScan, isPremium,
-    showPremiumModal, openPremiumModal, dismissPremiumModal, setPremiumStatus,
+    scans, lastScores, prevScores, deleteScan, isPremium, openPremiumModal,
+    user, skinFeel, questionnaireAnswers, shelf, trials, completions,
   } = useStore();
+  const [reporting, setReporting] = useState(false);
   const [metric, setMetric] = useState<keyof SkinScores>('overall');
   const [beforeId, setBeforeId] = useState<string | null>(null);
   const [showTimelapse, setShowTimelapse] = useState(false);
@@ -63,7 +64,22 @@ export const Progress: React.FC = () => {
       { text: 'Delete', style: 'destructive', onPress: () => deleteScan(e.id) },
     ]);
 
-  const playTimelapse = () => (isPremium ? setShowTimelapse(true) : openPremiumModal());
+  const playTimelapse = () => (isPremium ? setShowTimelapse(true) : openPremiumModal('timelapse'));
+
+  const makeReport = async () => {
+    if (!isPremium) return openPremiumModal('report');
+    setReporting(true);
+    try {
+      await shareReport({
+        name: user?.name ?? 'Not given', skinFeel, answers: questionnaireAnswers,
+        scans, shelf, trials, completions,
+      });
+    } catch {
+      Alert.alert('Couldn\'t make the report', 'Try again in a moment.');
+    } finally {
+      setReporting(false);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -80,10 +96,16 @@ export const Progress: React.FC = () => {
               your skin, <Text style={{ fontStyle: 'italic', color: C.accentInk }}>over time</Text>
             </Text>
           </View>
-          <TouchableOpacity style={styles.recapBtn} onPress={() => setShowRecap(true)} activeOpacity={0.8}>
-            <CalendarDays size={14} strokeWidth={1.3} color={C.accentInk} />
-            <Text style={[T.button, { fontSize: 11, color: C.accentInk }]}>Recap</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <TouchableOpacity style={styles.recapBtn} onPress={makeReport} disabled={reporting} activeOpacity={0.8}>
+              <FileText size={14} strokeWidth={1.3} color={C.accentInk} />
+              <Text style={[T.button, { fontSize: 11, color: C.accentInk }]}>{reporting ? 'Preparing…' : 'Report'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.recapBtn} onPress={() => setShowRecap(true)} activeOpacity={0.8}>
+              <CalendarDays size={14} strokeWidth={1.3} color={C.accentInk} />
+              <Text style={[T.button, { fontSize: 11, color: C.accentInk }]}>Recap</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Scan />
@@ -184,12 +206,6 @@ export const Progress: React.FC = () => {
 
       <Timelapse visible={showTimelapse} photos={photos} onClose={() => setShowTimelapse(false)} />
       <MonthlyRecap visible={showRecap} onClose={() => setShowRecap(false)} />
-      <PremiumModal
-        visible={showPremiumModal}
-        onClose={dismissPremiumModal}
-        onActivate={() => { setPremiumStatus(true); dismissPremiumModal(); }}
-        reason="timelapse"
-      />
     </View>
   );
 };

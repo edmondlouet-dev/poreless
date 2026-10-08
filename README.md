@@ -141,6 +141,29 @@ which keeps the keys on the server.
    address. Without it, every AI feature uses its built-in simulation.
 
 Anything prefixed `EXPO_PUBLIC_` is built into the app, so never put a key there.
+(RevenueCat's public SDK keys below are the exception: they're designed to ship in apps.)
+
+## Premium (£4.99 a month)
+
+| Free | Premium |
+|---|---|
+| 4 face scans + 4 label reads a month | 30 of each |
+| Routine, clash warnings, UV/SPF, trials | same |
+| Photo timeline, compare, this and last month's recap | every monthly recap, timelapse |
+| Restore a backup | make backups, dermatologist report PDF |
+
+AI allowances are counted on the phone (`src/limits.ts`), so they're a soft limit
+until the proxy counts per account.
+
+Billing runs through RevenueCat (`src/services/purchases.ts`). To charge for real:
+
+1. Create a monthly subscription at £4.99 in App Store Connect and Google Play Console.
+2. In RevenueCat, add both apps, an entitlement called `premium` with those products,
+   and make them the current offering's monthly package.
+3. Put the public SDK keys in `.env` as `EXPO_PUBLIC_RC_IOS_KEY` / `EXPO_PUBLIC_RC_ANDROID_KEY`
+   and make a new build.
+
+Without the keys the paywall runs in test mode and unlocks Premium for free.
 
 ---
 

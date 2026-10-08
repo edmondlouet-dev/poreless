@@ -8,6 +8,7 @@ import { Background } from '../components/Background';
 import { FaceLogo } from '../components/FaceLogo';
 import { FlutedGlass } from '../components/FlutedGlass';
 import { useStore } from '../store';
+import { SKINTYPE_LABEL, CONCERN_LABEL } from '../skin';
 import { C, R, T, S } from '../tokens';
 
 const ChevronRight = () => (
@@ -29,13 +30,6 @@ interface Props {
 
 type InfoModal = 'skin' | 'privacy' | 'about' | null;
 
-const SKINTYPE_LABEL: Record<string, string> = {
-  oily: 'Oily', dry: 'Dry', combo: 'Combination', normal: 'Normal', sensitive: 'Sensitive',
-};
-const CONCERN_LABEL: Record<string, string> = {
-  acne: 'Acne & breakouts', dryness: 'Dryness', darkspots: 'Dark spots',
-  texture: 'Texture & pores', redness: 'Redness & sensitivity', aging: 'Fine lines & aging',
-};
 
 const InfoRow: React.FC<{ label: string; value: string; last?: boolean }> = ({ label, value, last }) => (
   <View style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 9, gap: 16 },
@@ -67,7 +61,7 @@ export const You: React.FC<Props> = ({ onSettings }) => {
           </View>
           {isPremium && (
             <View style={styles.premiumBadge}>
-              <Text style={[T.pill, { color: C.accent }]}>✦ LIFETIME PREMIUM</Text>
+              <Text style={[T.pill, { color: C.accent }]}>✦ PREMIUM</Text>
             </View>
           )}
           <Text style={[T.h2, { marginTop: 10 }]}>{displayName}</Text>
@@ -161,7 +155,8 @@ export const You: React.FC<Props> = ({ onSettings }) => {
               <>
                 {[
                   ['What leaves your phone', 'When you scan your face or a product label, that photo is sent through the Poreless server to Google\'s Gemini AI to be read. The Poreless server doesn\'t save it.'],
-                  ['What stays on your phone', 'Your progress photos, scores, shelf, routine history and profile are saved only on this device.'],
+                  ['What stays on your phone', 'Your progress photos, scores, shelf, routine history and profile are saved only on this device, unless you make a backup, which goes wherever you choose to save it.'],
+                  ['Subscriptions', 'Premium is billed by the App Store or Google Play. Poreless never sees your card details.'],
                   ['Location', 'If you allow it, your rough location (about 1 km) is sent to Open-Meteo to look up today\'s UV index. It isn\'t stored.'],
                   ['No selling', 'We never sell your data or skin photos to third parties.'],
                   ['Your control', 'Hold a photo on the Progress tab to delete it, or use Settings → Start over to erase everything on this device.'],

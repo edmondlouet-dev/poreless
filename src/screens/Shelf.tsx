@@ -8,7 +8,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
-  Modal, FlatList, Image, ActivityIndicator, Linking,
+  Modal, FlatList, Image, ActivityIndicator, Linking, Alert,
 } from 'react-native';
 import {
   ScanText, TriangleAlert, CircleAlert, Droplet, ArrowUpRight, Minus,
@@ -64,7 +64,19 @@ const ProductThumb: React.FC<{ uri: string | null }> = ({ uri }) => {
 
 export const Shelf: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { shelf, trials, skinFeel, lastScores, addProduct, removeProduct, setProductCategory } = useStore();
+  const {
+    shelf, trials, skinFeel, lastScores, addProduct, removeProduct, setProductCategory,
+    geminiLive, aiLeft, isPremium, openPremiumModal,
+  } = useStore();
+
+  // Label reads are paid AI calls; searching by name stays free and unlimited.
+  const openScanner = () => {
+    if (geminiLive && aiLeft('label') <= 0) {
+      if (!isPremium) return openPremiumModal('scans');
+      return Alert.alert('Monthly label reads used', 'They reset on the 1st. You can still add products with + Add product.');
+    }
+    setShowScanner(true);
+  };
 
   const [showScanner, setShowScanner] = useState(false);
   const [showAdd, setShowAdd]         = useState(false);
@@ -137,7 +149,7 @@ export const Shelf: React.FC = () => {
               your <Text style={{ fontStyle: 'italic', color: C.accentInk }}>products</Text>
             </Text>
           </View>
-          <TouchableOpacity style={styles.scannerBtn} onPress={() => setShowScanner(true)} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.scannerBtn} onPress={openScanner} activeOpacity={0.8}>
             <ScanText size={18} strokeWidth={1.2} color={C.accentInk} />
             <Text style={[T.button, { fontSize: 11, color: C.accentInk }]}>Scan label</Text>
           </TouchableOpacity>
@@ -266,7 +278,7 @@ export const Shelf: React.FC = () => {
           <TouchableOpacity style={[styles.addBtn, { flex: 1 }]} onPress={() => setShowAdd(true)} activeOpacity={0.8}>
             <Text style={[T.button, { color: C.ink }]}>+ Add product</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.scanBtn} onPress={() => setShowScanner(true)} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.scanBtn} onPress={openScanner} activeOpacity={0.8}>
             <ScanText size={16} strokeWidth={1.2} color={C.accentInk} />
             <Text style={[T.button, { color: C.accentInk, fontSize: 12 }]}>Scan label</Text>
           </TouchableOpacity>

@@ -2,7 +2,7 @@
 // (first vs last photo and score), and product trial outcomes.
 import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, Image, StyleSheet, useWindowDimensions } from 'react-native';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Lock, X } from 'lucide-react-native';
 import { FlutedGlass } from './FlutedGlass';
 import { useStore } from '../store';
 import { buildRecap, recapIsEmpty, recapMonths } from '../recap';
@@ -15,10 +15,13 @@ interface Props {
   onClose: () => void;
 }
 
+// Free shows the latest two months (this one and last); Premium keeps them all.
+const FREE_MONTHS = 2;
+
 const VERDICT_LABEL = { better: 'Working', same: 'No change', worse: 'Made it worse' } as const;
 
 export const MonthlyRecap: React.FC<Props> = ({ visible, initialMonth, onClose }) => {
-  const { completions, scans, shelf, trials } = useStore();
+  const { completions, scans, shelf, trials, isPremium, openPremiumModal } = useStore();
   const { width } = useWindowDimensions();
   const data = { completions, scans, shelf, trials };
   const months = recapMonths(data);
@@ -34,6 +37,9 @@ export const MonthlyRecap: React.FC<Props> = ({ visible, initialMonth, onClose }
   const month = months[Math.min(idx, months.length - 1)]!;
   const r = buildRecap(month, data);
   const empty = recapIsEmpty(r);
+  const locked = !isPremium && idx >= FREE_MONTHS;
+  // The paywall can't open over this sheet, so close it first.
+  const unlock = () => { onClose(); setTimeout(() => openPremiumModal('recap'), 450); };
   const pct = r.daysInPeriod ? Math.round((r.activeDays / r.daysInPeriod) * 100) : 0;
   const photoW = (width - S.gutter * 2 - 10) / 2;
 
@@ -61,7 +67,18 @@ export const MonthlyRecap: React.FC<Props> = ({ visible, initialMonth, onClose }
         </View>
 
         <ScrollView contentContainerStyle={{ padding: S.gutter, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-          {empty ? (
+          {locked ? (
+            <View style={{ alignItems: 'center', marginTop: 40, paddingHorizontal: 12 }}>
+              <Lock size={22} strokeWidth={1.3} color={C.accentInk} />
+              <Text style={[T.h2, { fontSize: 18, marginTop: 12, textAlign: 'center' }]}>Older recaps are Premium</Text>
+              <Text style={[T.bodySm, { color: C.ink3, textAlign: 'center', marginTop: 6, lineHeight: 18 }]}>
+                Free shows this month and last month. Your data for {monthLabel(month)} is still saved.
+              </Text>
+              <TouchableOpacity style={styles.unlockBtn} onPress={unlock} activeOpacity={0.85}>
+                <Text style={[T.button, { color: C.bg, fontSize: 13 }]}>See Premium</Text>
+              </TouchableOpacity>
+            </View>
+          ) : empty ? (
             <Text style={[T.bodySm, { color: C.ink3, textAlign: 'center', marginTop: 40, lineHeight: 18 }]}>
               Nothing logged this month yet. Finish a routine or take a scan and it will show up here.
             </Text>
@@ -161,4 +178,5 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   photo: { borderRadius: R.md, backgroundColor: C.surface2 },
   changeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  unlockBtn: { backgroundColor: C.ink, borderRadius: R.md, paddingVertical: 12, paddingHorizontal: 22, marginTop: 18 },
 });

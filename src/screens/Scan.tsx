@@ -40,7 +40,11 @@ const metricsFromScores = (s: SkinAnalysis) => [
 ];
 
 export const Scan: React.FC = () => {
-  const { addScan, setSkinFeel, skinFeel, scans, geminiLive } = useStore();
+  const {
+    addScan, setSkinFeel, skinFeel, scans, geminiLive,
+    aiLeft, recordAiUse, isPremium, openPremiumModal,
+  } = useStore();
+  const scansLeft = aiLeft('face');
   const [permission, requestPermission] = useCameraPermissions();
   const [step, setStep]     = useState<Step>('preview');
   const [scores, setScores] = useState<SkinAnalysis | null>(null);
@@ -58,6 +62,11 @@ export const Scan: React.FC = () => {
   const pickFeel = (k: SkinFeel) => setSkinFeel(SKIN_FEEL[k]);
 
   const capture = async () => {
+    // Each live scan is a paid AI call, so it comes out of a monthly allowance.
+    if (geminiLive && scansLeft <= 0) {
+      if (!isPremium) return openPremiumModal('scans');
+      return Alert.alert('Monthly scans used', 'Your scans reset on the 1st. Your photo timeline and trends are still here.');
+    }
     setStep('scanning');
     try {
       let base64 = '';
@@ -76,6 +85,7 @@ export const Scan: React.FC = () => {
         }
       }
       const result = await analyzeSkinFrame(base64);
+      if (!result.simulated) recordAiUse('face');
       setScores(result);
       setRetake(result.photoUsable ? null : (result.photoIssue ?? ''));
       // A usable photo joins the progress timeline. Only a real reading adds
@@ -275,6 +285,11 @@ export const Scan: React.FC = () => {
                 {usable ? '✓  Saved · take another' : '⊙  Retake'}
               </Text>
             </TouchableOpacity>
+          )}
+          {geminiLive && (
+            <Text style={[T.bodySm, { color: C.ink4, fontSize: 11, textAlign: 'center', marginTop: 8 }]}>
+              {scansLeft} scan{scansLeft === 1 ? '' : 's'} left this month{isPremium ? '' : ' · free plan'}
+            </Text>
           )}
         </View>
       )}

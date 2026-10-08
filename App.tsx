@@ -30,6 +30,7 @@ import { Progress } from './src/screens/Progress';
 import { Shelf } from './src/screens/Shelf';
 import { You } from './src/screens/You';
 import { Settings } from './src/screens/Settings';
+import { PremiumModal } from './src/components/PremiumModal';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,7 +79,12 @@ const MainApp: React.FC = () => {
 
   // Step 4: Settings overlay
   if (showSettings) {
-    return <Settings onBack={() => setShowSettings(false)} />;
+    return (
+      <>
+        <Settings onBack={() => setShowSettings(false)} />
+        <PremiumModal />
+      </>
+    );
   }
 
   // Step 5: Main tab interface
@@ -96,6 +102,8 @@ const MainApp: React.FC = () => {
       <View style={styles.tabBarContainer}>
         <TabBar active={activeTab} onChange={setActiveTab} />
       </View>
+
+      <PremiumModal />
     </View>
   );
 };

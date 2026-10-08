@@ -1,33 +1,61 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet,
-  Animated, Dimensions,
+  Animated, Dimensions, ActivityIndicator, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Lock, Sparkles, X } from 'lucide-react-native';
+import { useStore, type PremiumReason } from '../store';
+import { AI_LIMITS } from '../limits';
+import { BILLING_LIVE, PRICE_LABEL, monthlyPrice, restore, subscribe } from '../services/purchases';
 import { C, R, T, S } from '../tokens';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
-interface Props {
-  visible: boolean;
-  onClose: () => void;
-  onActivate?: () => void;
-  reason?: 'timelapse';
-}
+const { free: FREE, premium: PREM } = AI_LIMITS;
 
-const COPY = {
+const COPY: Record<PremiumReason, { eyebrow: string; title: string; body: string }> = {
+  scans: {
+    eyebrow: 'AI SCANS · PREMIUM',
+    title: 'You\'ve used this month\'s\nfree scans.',
+    body: `Free includes ${FREE.face} face scans and ${FREE.label} label reads a month, and resets on the 1st. Premium raises that to ${PREM.face} of each, about one a day.`,
+  },
+  report: {
+    eyebrow: 'DERMATOLOGIST REPORT · PREMIUM',
+    title: 'Walk into your appointment\nwith the answers.',
+    body: 'A PDF of your progress photos, every product with its start date, and how each trial went. It answers "what have you tried, and for how long?"',
+  },
+  backup: {
+    eyebrow: 'PHOTO BACKUP · PREMIUM',
+    title: 'Don\'t lose months\nof progress.',
+    body: 'Your photos and history live only on this phone. Premium saves a backup to iCloud Drive, Google Drive or anywhere in Files. Restoring a backup is always free.',
+  },
+  recap: {
+    eyebrow: 'RECAP HISTORY · PREMIUM',
+    title: 'See every month,\nnot just the latest.',
+    body: 'Free shows this month and last month. Premium keeps every monthly recap, so you can look back to where you started.',
+  },
   timelapse: {
     eyebrow: 'PROGRESS TIMELAPSE · PREMIUM',
     title: 'Watch your skin change\nweek by week.',
-    body: 'Scans, your photo timeline, before-and-after compare and the monthly recap are free. Premium plays every progress photo as a timelapse.',
+    body: 'Your photo timeline and before-and-after compare are free. Premium plays every progress photo as a timelapse.',
   },
 };
 
-export const PremiumModal: React.FC<Props> = ({
-  visible, onClose, onActivate, reason = 'timelapse',
-}) => {
+const FEATURES = [
+  `${PREM.face} face scans and ${PREM.label} label reads a month`,
+  'Dermatologist report (PDF)',
+  'Photo backup to iCloud or Google Drive',
+  'Every monthly recap',
+  'Progress timelapse',
+];
+
+// One paywall for the whole app; it opens on whatever the user just tapped.
+export const PremiumModal: React.FC = () => {
+  const { showPremiumModal: visible, premiumReason, dismissPremiumModal, setPremiumStatus } = useStore();
   const slide = useRef(new Animated.Value(SCREEN_H)).current;
+  const [price, setPrice] = useState(PRICE_LABEL);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     Animated.spring(slide, {
@@ -35,28 +63,49 @@ export const PremiumModal: React.FC<Props> = ({
       useNativeDriver: true,
       bounciness: 4,
     }).start();
+    if (visible) monthlyPrice().then(p => p && setPrice(p)).catch(() => {});
   }, [visible]);
 
-  const copy = COPY[reason];
+  const copy = COPY[premiumReason];
+
+  const onSubscribe = async () => {
+    setBusy(true);
+    const outcome = await subscribe();
+    setBusy(false);
+    if (outcome === 'subscribed' || outcome === 'test') {
+      setPremiumStatus(true);
+      dismissPremiumModal();
+    } else if (outcome === 'failed') {
+      Alert.alert('Couldn\'t start Premium', 'Nothing was charged. Check your connection and try again.');
+    }
+  };
+
+  const onRestore = async () => {
+    setBusy(true);
+    const ok = await restore();
+    setBusy(false);
+    if (ok) { setPremiumStatus(true); dismissPremiumModal(); }
+    else Alert.alert('No subscription found', 'This store account doesn\'t have an active Poreless Premium subscription.');
+  };
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={dismissPremiumModal}
       statusBarTranslucent
     >
       <View style={styles.backdrop}>
         <BlurView style={StyleSheet.absoluteFill} intensity={60} tint="light" />
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={dismissPremiumModal} />
 
         <Animated.View style={[styles.sheet, { transform: [{ translateY: slide }] }]}>
           {/* Top handle */}
           <View style={styles.handle} />
 
           {/* Close */}
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.closeBtn} onPress={dismissPremiumModal} activeOpacity={0.7}>
             <X size={24} strokeWidth={1.2} color={C.ink3} />
           </TouchableOpacity>
 
@@ -73,24 +122,21 @@ export const PremiumModal: React.FC<Props> = ({
             {copy.title}
           </Text>
 
-          <Text style={[T.bodySm, { color: C.ink3, textAlign: 'center', lineHeight: 19, marginBottom: 28, paddingHorizontal: 8 }]}>
+          <Text style={[T.bodySm, { color: C.ink3, textAlign: 'center', lineHeight: 19, marginBottom: 22, paddingHorizontal: 8 }]}>
             {copy.body}
           </Text>
 
           {/* Price row */}
           <View style={styles.priceRow}>
             <View>
-              <Text style={[T.num, { fontSize: 32, fontWeight: '700', color: C.ink }]}>£6.99</Text>
+              <Text style={[T.num, { fontSize: 32, fontWeight: '700', color: C.ink }]}>{price}</Text>
               <Text style={[T.kicker, { color: C.ink3, marginTop: 2 }]}>PER MONTH</Text>
             </View>
             <View style={styles.featureList}>
-              {[
-                'Progress photo timelapse',
-                'Everything else stays free',
-              ].map(f => (
+              {FEATURES.map(f => (
                 <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
                   <Sparkles size={12} strokeWidth={1.2} color={C.accent} />
-                  <Text style={[T.bodySm, { color: C.ink2, fontSize: 11 }]}>{f}</Text>
+                  <Text style={[T.bodySm, { color: C.ink2, fontSize: 11, flex: 1 }]}>{f}</Text>
                 </View>
               ))}
             </View>
@@ -98,17 +144,27 @@ export const PremiumModal: React.FC<Props> = ({
 
           {/* CTA */}
           <TouchableOpacity
-            style={styles.cta}
+            style={[styles.cta, busy && { opacity: 0.6 }]}
             activeOpacity={0.85}
-            onPress={onActivate ?? onClose}
+            onPress={onSubscribe}
+            disabled={busy}
           >
-            <Sparkles size={16} strokeWidth={1.2} color={C.bg} />
-            <Text style={[T.button, { color: C.bg, fontSize: 14 }]}>Activate Membership →</Text>
+            {busy ? <ActivityIndicator color={C.bg} /> : <Sparkles size={16} strokeWidth={1.2} color={C.bg} />}
+            <Text style={[T.button, { color: C.bg, fontSize: 14 }]}>
+              {BILLING_LIVE ? `Subscribe · ${price}/month` : 'Unlock Premium · test mode'}
+            </Text>
           </TouchableOpacity>
 
-          <Text style={[T.bodySm, { color: C.ink4, textAlign: 'center', marginTop: 14, fontSize: 11, lineHeight: 16 }]}>
-            Cancel anytime. Billed monthly via App Store.{'\n'}
-            Free tier features always remain available.
+          {BILLING_LIVE && (
+            <TouchableOpacity onPress={onRestore} disabled={busy} style={{ alignSelf: 'center', marginTop: 12 }} hitSlop={8}>
+              <Text style={[T.bodySm, { color: C.ink3, fontSize: 12, textDecorationLine: 'underline' }]}>Restore purchase</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={[T.bodySm, { color: C.ink4, textAlign: 'center', marginTop: 12, fontSize: 11, lineHeight: 16 }]}>
+            {BILLING_LIVE
+              ? 'Renews monthly until you cancel in your store account settings.\nRoutine, clash warnings, UV and trials always stay free.'
+              : 'Store billing isn\'t set up in this build, so nothing is charged.\nRoutine, clash warnings, UV and trials always stay free.'}
           </Text>
         </Animated.View>
       </View>

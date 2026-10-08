@@ -25,3 +25,21 @@ export async function deleteAllPhotos(): Promise<void> {
   if (!DIR) return;
   try { await FileSystem.deleteAsync(DIR, { idempotent: true }); } catch {}
 }
+
+export async function readPhotoBase64(uri: string): Promise<string | null> {
+  try { return await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }); }
+  catch { return null; }
+}
+
+// Writes a photo from a backup back into the progress folder.
+export async function writePhotoBase64(id: string, base64: string): Promise<string | null> {
+  if (!DIR) return null;
+  try {
+    await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
+    const dest = `${DIR}${id}.jpg`;
+    await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
+    return dest;
+  } catch {
+    return null;
+  }
+}

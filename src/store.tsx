@@ -7,6 +7,8 @@ import { isCategory, type ProductCategory } from './products';
 import { trialFor, type Trial, type TrialVerdict } from './trials';
 import { dayKey, streakFrom } from './dates';
 import { keepPhoto, deletePhoto, deleteAllPhotos } from './services/photos';
+import { checkPremium } from './services/purchases';
+import { aiLeft, currentUsage, emptyUsage, type AiKind, type AiUsage } from './limits';
 import {
   analyzeProductConflict, analyzeProductFromImage,
   verifyGeminiKey, GEMINI_LIVE,
@@ -56,7 +58,7 @@ export interface QuestionnaireAnswers {
 }
 
 // Everything below is saved on the phone and survives restarts.
-interface SavedData {
+export interface SavedData {
   skinFeel: string;                           // how the user SAYS their skin feels
   shelf: ShelfProduct[];
   scans: ScanEntry[];
@@ -64,7 +66,12 @@ interface SavedData {
   doneSteps: Record<string, ProductCategory[]>; // today's ticked steps, per routine
   trials: Trial[];
   spfReapplyAt: string | null;
+  premium: boolean;                           // subscription, as last confirmed by the store
+  aiUsage: AiUsage;                           // AI calls used this calendar month
 }
+
+// Why the paywall opened, so it leads with the feature the user just tapped.
+export type PremiumReason = 'scans' | 'report' | 'backup' | 'recap' | 'timelapse';
 
 interface StoreState extends SavedData {
   authed: boolean;
@@ -73,6 +80,7 @@ interface StoreState extends SavedData {
   questionnaireComplete: boolean;
   user: UserProfile | null;
   showPremiumModal: boolean;
+  premiumReason: PremiumReason;
   questionnaireAnswers: QuestionnaireAnswers;
   isAnalyzing: boolean;            // true while a label read is in flight
   geminiLive: boolean;             // verified at launch — drives truthful LIVE/DEMO badges
@@ -83,6 +91,7 @@ interface StoreComputed {
   streak: number;
   lastScores: SkinScores | null;
   prevScores: SkinScores | null;
+  aiLeft: (kind: AiKind) => number;
 }
 
 interface StoreActions {
@@ -103,7 +112,9 @@ interface StoreActions {
   setTrialVerdict: (productId: string, verdict: TrialVerdict) => void;
   setSpfReapplyAt: (iso: string | null) => void;
   setPremiumStatus: (isPremium: boolean) => void;
-  openPremiumModal: () => void;
+  openPremiumModal: (reason?: PremiumReason) => void;
+  recordAiUse: (kind: AiKind) => void;
+  restoreData: (data: Omit<SavedData, 'premium' | 'aiUsage'>, answers: QuestionnaireAnswers | null) => void;
   dismissPremiumModal: () => void;
   analyzeLabel: (rawLabelText: string, imageBase64?: string) => Promise<NewProduct>;
   resetApp: () => Promise<void>;   // wipe all local data → restart at the intro
@@ -142,6 +153,8 @@ const EMPTY_DATA: SavedData = {
   doneSteps: {},
   trials: [],
   spfReapplyAt: null,
+  premium: false,
+  aiUsage: emptyUsage(),
 };
 
 const defaults: StoreState = {
@@ -152,6 +165,7 @@ const defaults: StoreState = {
   questionnaireComplete: false,
   user: null,
   showPremiumModal: false,
+  premiumReason: 'scans',
   questionnaireAnswers: EMPTY_ANSWERS,
   isAnalyzing: false,
   geminiLive: GEMINI_LIVE,
@@ -160,6 +174,7 @@ const defaults: StoreState = {
 const pickSaved = (s: StoreState): SavedData => ({
   skinFeel: s.skinFeel, shelf: s.shelf, scans: s.scans, completions: s.completions,
   doneSteps: s.doneSteps, trials: s.trials, spfReapplyAt: s.spfReapplyAt,
+  premium: s.premium, aiUsage: s.aiUsage,
 });
 
 const newId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -216,6 +231,10 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         questionnaireAnswers: answers,
       }));
       setHydrated(true);
+
+      // The store is the source of truth for the subscription; offline or in
+      // test mode, keep the last known state.
+      checkPremium().then(p => { if (p !== null) setState(s => ({ ...s, premium: p })); }).catch(() => {});
 
       // Confirm the AI proxy actually answers so badges tell the truth.
       verifyGeminiKey().then(ok => setState(s => ({ ...s, geminiLive: ok }))).catch(() => {});
@@ -348,11 +367,32 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
   const setSpfReapplyAt = (spfReapplyAt: string | null) => setState(s => ({ ...s, spfReapplyAt }));
 
-  const setPremiumStatus = (isPremium: boolean) =>
-    setState(s => ({ ...s, user: s.user ? { ...s.user, premium: isPremium } : s.user }));
+  const setPremiumStatus = (premium: boolean) => setState(s => ({ ...s, premium }));
 
-  const openPremiumModal    = () => setState(s => ({ ...s, showPremiumModal: true }));
+  const openPremiumModal = (reason: PremiumReason = 'scans') =>
+    setState(s => ({ ...s, showPremiumModal: true, premiumReason: reason }));
   const dismissPremiumModal = () => setState(s => ({ ...s, showPremiumModal: false }));
+
+  const recordAiUse = (kind: AiKind) =>
+    setState(s => {
+      const u = currentUsage(s.aiUsage);
+      return { ...s, aiUsage: { ...u, [kind]: u[kind] + 1 } };
+    });
+
+  // Replaces everything on this phone with a backup's contents. The
+  // subscription and this month's AI allowance stay as they are.
+  const restoreData = (data: Omit<SavedData, 'premium' | 'aiUsage'>, answers: QuestionnaireAnswers | null) => {
+    if (answers) AsyncStorage.setItem(ANSWERS_KEY, JSON.stringify(answers)).catch(() => {});
+    setState(s => ({
+      ...s,
+      ...EMPTY_DATA,
+      ...data,
+      premium: s.premium,
+      aiUsage: s.aiUsage,
+      doneSteps: {},
+      questionnaireAnswers: answers ? { ...EMPTY_ANSWERS, ...answers } : s.questionnaireAnswers,
+    }));
+  };
 
   // Wipe all local data and return to the very first screen (the intro/pitch).
   const resetApp = async () => {
@@ -361,6 +401,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     try { await authSignOut(); } catch {}
     try { await AsyncStorage.setItem(RESET_KEY, RESET_TOKEN); } catch {}
     setState({ ...defaults, geminiLive: stateRef.current.geminiLive });
+    checkPremium().then(p => { if (p !== null) setState(s => ({ ...s, premium: p })); }).catch(() => {});
   };
 
   // The label scanner hands us a photo (or raw text); the AI reads the product
@@ -372,6 +413,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
       const result = imageBase64
         ? await analyzeProductFromImage(feel, imageBase64)
         : await analyzeProductConflict(feel, rawLabelText);
+      if (GEMINI_LIVE) recordAiUse('label');
       const q = `${result.brand} ${result.name}`.trim();
       return {
         name: result.name,
@@ -386,6 +428,8 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const isPremium = !!state.user?.premium || state.premium;
+
   const scored = state.scans.filter(e => e.scores);
   const lastScores = scored[scored.length - 1]?.scores ?? null;
   const prevScores = scored[scored.length - 2]?.scores ?? null;
@@ -393,13 +437,14 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   return (
     <StoreContext.Provider value={{
       ...state,
-      isPremium: state.user?.premium ?? false,
+      isPremium,
       streak: streakFrom(state.completions),
       lastScores, prevScores,
+      aiLeft: (kind: AiKind) => aiLeft(state.aiUsage, kind, isPremium),
       login, logout, setPitchSeen, setPlanSeen, completeQuestionnaire, saveQuestionnaire,
       setSkinFeel, addProduct, removeProduct, setProductCategory, addScan, deleteScan,
       toggleStep, completeRoutine, setTrialVerdict, setSpfReapplyAt,
-      setPremiumStatus, openPremiumModal, dismissPremiumModal,
+      setPremiumStatus, openPremiumModal, dismissPremiumModal, recordAiUse, restoreData,
       analyzeLabel, resetApp,
     }}>
       {children}

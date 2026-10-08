@@ -10,3 +10,12 @@ export const SKIN_FEEL: Record<SkinFeel, string> = {
   sensitive:   'Feels sensitive',
 };
 export const SKIN_FEEL_UNSET = 'Not checked yet';
+
+// Onboarding answer codes → readable labels.
+export const SKINTYPE_LABEL: Record<string, string> = {
+  oily: 'Oily', dry: 'Dry', combo: 'Combination', normal: 'Normal', sensitive: 'Sensitive',
+};
+export const CONCERN_LABEL: Record<string, string> = {
+  acne: 'Acne & breakouts', dryness: 'Dryness', darkspots: 'Dark spots',
+  texture: 'Texture & pores', redness: 'Redness & sensitivity', aging: 'Fine lines & aging',
+};

@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,14 +20,12 @@ interface Props { onBack: () => void }
 
 export const Settings: React.FC<Props> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  const { temperatureUnit, setTemperatureUnit, userProfile, togglePassiveTracking, geminiLive, resetApp } = useStore();
-
-  const isCelsius = temperatureUnit === 'C';
+  const { geminiLive, resetApp } = useStore();
 
   const confirmReset = () => {
     Alert.alert(
       'Start over?',
-      'This clears your profile, answers, shelf and sign-in on this device, and returns you to the intro. This cannot be undone.',
+      'This clears your profile, answers, shelf, progress photos and sign-in on this device, and returns you to the intro. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Reset everything', style: 'destructive', onPress: () => { resetApp(); } },
@@ -56,79 +54,6 @@ export const Settings: React.FC<Props> = ({ onBack }) => {
           contentContainerStyle={[styles.scroll, { paddingBottom: 100 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Temperature unit */}
-          <Text style={[T.kicker, { marginBottom: 8 }]}>DISPLAY</Text>
-          <FlutedGlass padding={0} style={{ marginBottom: 18, overflow: 'hidden' }}>
-            <View style={styles.settingRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={[T.body, { fontWeight: '500' }]}>Temperature Unit</Text>
-                <Text style={[T.bodySm, { color: C.ink3, marginTop: 2 }]}>
-                  Shown on Today's weather/UV strip
-                </Text>
-              </View>
-              {/* C / F toggle */}
-              <View style={styles.unitToggle}>
-                <TouchableOpacity
-                  style={[styles.unitBtn, isCelsius && styles.unitBtnActive]}
-                  onPress={() => setTemperatureUnit('C')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[T.button, { fontSize: 13, color: isCelsius ? C.accentInk : C.ink3 }]}>°C</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.unitBtn, !isCelsius && styles.unitBtnActive]}
-                  onPress={() => setTemperatureUnit('F')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[T.button, { fontSize: 13, color: !isCelsius ? C.accentInk : C.ink3 }]}>°F</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </FlutedGlass>
-
-          {/* Passive vanity tracking */}
-          <Text style={[T.kicker, { marginBottom: 8 }]}>TRACKING</Text>
-          <FlutedGlass padding={0} style={{ marginBottom: 18, overflow: 'hidden' }}>
-            <View style={styles.settingRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={[T.body, { fontWeight: '500' }]}>Passive Vanity Tracking</Text>
-                <Text style={[T.bodySm, { color: C.ink3, marginTop: 2, lineHeight: 17 }]}>
-                  Quietly logs passive metrics and habit streaks in the background.
-                </Text>
-              </View>
-              <Switch
-                value={userProfile.passiveTrackingEnabled}
-                onValueChange={togglePassiveTracking}
-                trackColor={{ false: C.surface3, true: C.accent + '80' }}
-                thumbColor={userProfile.passiveTrackingEnabled ? C.accent : C.ink4}
-              />
-            </View>
-          </FlutedGlass>
-
-          {/* Notifications placeholder */}
-          <Text style={[T.kicker, { marginBottom: 8 }]}>NOTIFICATIONS</Text>
-          <FlutedGlass padding={0} style={{ marginBottom: 18, overflow: 'hidden' }}>
-            {[
-              { label: 'Morning reminder',  sub: 'Daily 7 AM routine nudge' },
-              { label: 'Scan reminder',     sub: 'Every 3 days' },
-              { label: 'Weekly summary',    sub: 'Sunday skin report' },
-            ].map((item, i, arr) => (
-              <View key={item.label}
-                style={[styles.settingRow, i < arr.length - 1 && styles.rowBorder]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[T.body, { fontWeight: '500' }]}>{item.label}</Text>
-                  <Text style={[T.bodySm, { color: C.ink3, marginTop: 2 }]}>{item.sub}</Text>
-                </View>
-                <Switch
-                  value={false}
-                  onValueChange={() => {}}
-                  trackColor={{ false: C.surface3, true: C.accent + '80' }}
-                  thumbColor={C.accent}
-                />
-              </View>
-            ))}
-          </FlutedGlass>
-
           {/* AI engine status — reflects a real key check at launch */}
           <Text style={[T.kicker, { marginBottom: 8 }]}>AI ENGINE</Text>
           <FlutedGlass padding={14} style={{ marginBottom: 18 }}>
@@ -153,8 +78,8 @@ export const Settings: React.FC<Props> = ({ onBack }) => {
             <Text style={[T.body, { fontWeight: '500' }]}>Poreless</Text>
             <Text style={[T.bodySm, { color: C.ink3, marginTop: 4 }]}>Version 1.0.0</Text>
             <Text style={[T.bodySm, { color: C.ink3, marginTop: 8, lineHeight: 17 }]}>
-              Skin analysis powered by peer-reviewed research.{'\n'}
-              Not medical advice. Always consult a dermatologist for clinical concerns.
+              Advice is based on published dermatology guidance.{'\n'}
+              Not medical advice. See a GP or dermatologist for anything that worries you.
             </Text>
           </FlutedGlass>
 
@@ -164,7 +89,7 @@ export const Settings: React.FC<Props> = ({ onBack }) => {
             <Text style={[T.button, { color: C.danger, fontSize: 13 }]}>Start over · reset all my data</Text>
           </TouchableOpacity>
           <Text style={[T.bodySm, { color: C.ink4, fontSize: 11, marginTop: 8, lineHeight: 16 }]}>
-            Clears your profile, answers, shelf and sign-in on this device and returns to the intro.
+            Clears your profile, answers, shelf, progress photos and sign-in on this device and returns to the intro.
           </Text>
         </ScrollView>
       </View>
@@ -178,21 +103,6 @@ const styles = StyleSheet.create({
   navBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: S.gutter },
-  settingRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 14, gap: 10,
-  },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
-  unitToggle: {
-    flexDirection: 'row',
-    borderWidth: 1, borderColor: C.line2,
-    borderRadius: R.md, overflow: 'hidden',
-  },
-  unitBtn: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    backgroundColor: C.surface,
-  },
-  unitBtnActive: { backgroundColor: C.accentSoft },
   statusDot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
   resetBtn: {
     borderWidth: 1, borderColor: C.danger + '55', borderRadius: R.md,

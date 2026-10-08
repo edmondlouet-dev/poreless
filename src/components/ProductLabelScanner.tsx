@@ -18,7 +18,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X, ScanText, ShoppingBag, Check, TriangleAlert } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useStore, type ShelfProduct } from '../store';
+import { useStore, type NewProduct } from '../store';
 import { C, R, T, S } from '../tokens';
 
 /**
@@ -46,7 +46,7 @@ interface Props {
   visible: boolean;
   barrierStatus: string;
   onClose: () => void;
-  onProductAdded: (product: ShelfProduct) => void;
+  onProductAdded: (product: NewProduct) => void;
 }
 
 type Phase = 'aim' | 'reading' | 'preview';
@@ -59,7 +59,7 @@ export const ProductLabelScanner: React.FC<Props> = ({
   const [permission, requestPermission] = useCameraPermissions();
   const [phase, setPhase]     = useState<Phase>('aim');
   const [stage, setStage]     = useState('');   // sub-status during reading
-  const [product, setProduct] = useState<ShelfProduct | null>(null);
+  const [product, setProduct] = useState<NewProduct | null>(null);
   const cameraRef = useRef<any>(null);
   const cardSlide = useRef(new Animated.Value(300)).current;
 

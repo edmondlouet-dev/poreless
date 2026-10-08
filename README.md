@@ -7,7 +7,7 @@ A high-fidelity React Native (Expo) implementation of the **Poreless** skincare 
 - **Modernised antiquity** aesthetic: paper-white surfaces, terracotta accent, Greek-roman typography
 - **Fluted glass** cards with animated touch response — tap or drag to see the texture shift
 - **Cormorant Garamond** (display) · **Inter** (body) · **JetBrains Mono** (numbers)
-- Five tabs: Today · Scan · Lookmax · Trend · You
+- Four tabs: Today · Progress · Shelf · You
 
 ---
 
@@ -62,8 +62,7 @@ Then in Chrome, press **F12** → click the phone icon (Toggle Device Toolbar) �
 Before a photo goes to the AI, `src/services/faceCheck.ts` runs Google ML Kit
 face detection on the phone. It sends back a retake prompt for no face, a turned
 or tilted head, a face that is too small, or closed eyes, without spending an AI
-call. On the Proportions scan it also measures eye tilt from the eye-corner
-landmarks instead of asking the AI to guess.
+call.
 
 ML Kit is native code, so it runs in a development build, not in Expo Go or on
 the web. There the check switches itself off and the AI's own photo check still
@@ -80,31 +79,38 @@ npx expo run:android   # builds and installs a dev build on the emulator or a pl
 ## Project Structure
 
 ```
-App.tsx                  — root, fonts + navigation
+App.tsx                  — root, onboarding gate + four tabs
 src/
   tokens.ts             — colors, spacing, typography
-  products.ts           — catalog + routine builder
-  store.tsx             — React Context state
+  store.tsx             — app state, saved on the phone (AsyncStorage)
+  products.ts           — routine builder: orders the shelf into AM/PM steps
+  conflicts.ts          — the one ingredient checker (Today + Shelf)
+  trials.ts             — "is it working?" timelines per active
+  recap.ts              — monthly recap numbers
+  rituals.ts            — routine templates from skincare traditions
+  dates.ts              — local-day keys and streaks
+  services/
+    gemini.ts           — face + label reads, via the proxy
+    faceCheck.ts        — on-device photo check (ML Kit)
+    uv.ts               — UV index from Open-Meteo
+    reminders.ts        — local SPF reapply notification
+    photos.ts           — progress photos, kept on the phone
+    openbeauty.ts       — product search
   components/
     FlutedGlass.tsx     — ★ signature animated glass card
-    Background.tsx      — radial gradient + global flute overlay
-    TabBar.tsx          — custom frosted glass tab bar
-    MetricStrip.tsx     — scrollable score cards
-    RoutineRow.tsx      — checkable routine item with WHY expander
-    FaceLogo.tsx        — animated SVG line-art face draw-in
-    Pill.tsx            — tag pill (default / accent / sage / on)
+    TabBar.tsx          — frosted glass tab bar
+    MonthlyRecap.tsx    — recap sheet
+    TrendChart.tsx      — score trend line
+    ScoreDetails.tsx    — what each score means
+    AmbientModeOverlay.tsx — "Guide me" timed walkthrough
+    ProductLabelScanner.tsx — label photo → product
   screens/
-    Login.tsx           — auth screen with animated logo
-    Today.tsx           — daily routine + score strip
-    Scan.tsx            — face scan UI
-    Lookmax.tsx         — facial structure analysis + warm palette
-    Trend.tsx           — progress chart + metric rows
-    You.tsx             — profile + settings list
-    Products.tsx        — product list + add modal
-assets/
-  scan-portrait.png     — line-art face portrait placeholder
-  logo-face.png         — logo raster fallback
-proxy/                  — small Node server that keeps the Gemini and INCI keys off the phone
+    Today.tsx           — brief (real UV), check-ins, routine, gaps
+    Progress.tsx        — scan, photo timeline, timelapse, trends, recap
+    Scan.tsx            — camera + ghost overlay + skin-feel check-in
+    Shelf.tsx           — products, ingredient check, trials, templates
+    You.tsx             — profile, privacy, settings
+proxy/                  — small Node server that keeps the Gemini key off the phone
 design/
   liquid-glass.html     — Liquid Glass HTML prototype
 legacy/
@@ -113,7 +119,7 @@ legacy/
 
 ## API keys
 
-The app never holds an API key. Gemini and INCI calls go through `proxy/`,
+The app never holds an API key. Gemini calls go through `proxy/`,
 which keeps the keys on the server.
 
 1. Copy `proxy/.env.example` to `proxy/.env` and add your Gemini (and INCI) key.
@@ -164,40 +170,3 @@ The movement is capped at ~3–4px so it never interferes with readability. It g
 Full token list in `src/tokens.ts`.
 
 ---
-
-## AR Sculpting Guides
-
-`src/components/ARSculptOverlay.tsx` lays a face-filter-style guide over the front
-camera: a wireframe **face mesh**, a pulsing **detection bracket**, animated
-**movement arrows** (drainage / sculpt / lift / soothe) and **press points**. It's
-launched two ways — from a ritual's Structural Blueprint (Rituals tab) and from
-Ambient Mode's "how to apply" button.
-
-**Lock-on state machine.** Each step runs an *acquisition sweep* (a scan line
-travels down the face while the mesh + bracket fade in), then flips to **FACE
-LOCKED**, and only *then* starts the AI completion detector. The whole guide is
-swayed as a single unit so it reads as anchored to the face. All of this uses only
-Expo-Go-safe APIs (`expo-camera` + `react-native-svg` + `Animated`), so it runs in
-Expo Go with no native build.
-
-### Optional: true face-landmark tracking (requires a dev build)
-
-Expo Go cannot run native frame processors, so the mesh is centered rather than
-pinned to real landmarks. To anchor overlays to actual face coordinates, move to an
-**EAS development build** and wire a detector:
-
-```bash
-# 1. Leave Expo Go behind — create a dev build
-npx expo install react-native-vision-camera react-native-worklets-core
-npm i  react-native-vision-camera-face-detector
-npx expo prebuild
-eas build --profile development --platform ios   # or run locally with Xcode
-```
-
-Then feed live landmarks into the overlay. The integration point already exists:
-`ARSculptOverlay` calls `detectStepCompletion(frameProvider, …)` with a
-`frameProvider` that currently returns `null`. Swap it for the detector's frame
-output, and map the returned landmark box to the SVG `viewBox` (the mesh, bracket
-and arrows are all authored in a `100 × 150` portrait space, so it's a single
-affine transform). Keep the Expo-Go fallback by guarding the native import behind a
-capability check so the app still loads in Expo Go.

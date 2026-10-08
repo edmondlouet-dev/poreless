@@ -57,22 +57,35 @@ Then in Chrome, press **F12** → click the phone icon (Toggle Device Toolbar) �
 
 ---
 
-## On-device photo checks (needs a development build)
+## Development build (needed for location, notifications and photo checks)
+
+UV (expo-location), SPF reminders (expo-notifications), saved progress photos
+(expo-file-system) and the ML Kit photo check are native code, so they need a
+development build of Poreless, not Expo Go. In Expo Go or on the web the photo
+check switches itself off and the AI's own photo check still applies.
+
+Build it in the cloud with EAS (free tier is enough; no Mac needed):
+
+```bash
+npm install
+npx eas-cli login                 # your Expo account
+npm run build:dev:android         # gives an install link / QR for an .apk
+npm run build:dev:ios             # needs an Apple Developer account; register your iPhone when asked
+```
+
+Install the build on your phone once, then run `npm start` and open the project
+from the Poreless dev app. You only need a new build when a native package is
+added or app.json changes; JavaScript changes load straight from `npm start`.
+
+Or build locally: `npx expo run:android` (Android SDK) or `npx expo run:ios`
+(a Mac with Xcode). iOS 15.5+ is set in app.json.
+
+### What the dev build does
 
 Before a photo goes to the AI, `src/services/faceCheck.ts` runs Google ML Kit
 face detection on the phone. It sends back a retake prompt for no face, a turned
 or tilted head, a face that is too small, or closed eyes, without spending an AI
 call.
-
-ML Kit is native code, so it runs in a development build, not in Expo Go or on
-the web. There the check switches itself off and the AI's own photo check still
-applies.
-
-```bash
-npm install
-npx expo run:android   # builds and installs a dev build on the emulator or a plugged-in phone
-# iOS (needs a Mac): npx expo run:ios   — iOS 15.5+, set in app.json
-```
 
 ---
 
